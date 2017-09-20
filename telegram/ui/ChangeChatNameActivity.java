@@ -3,69 +3,44 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.DialogInterface;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.os.Vibrator;
-import android.text.Editable;
-import android.text.InputFilter;
 import android.text.InputType;
-import android.text.TextWatcher;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.ApplicationLoader;
-import org.telegram.messenger.NotificationCenter;
-import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
-import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
-import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Cells.ShadowSectionCell;
-import org.telegram.ui.Cells.TextInfoPrivacyCell;
-import org.telegram.ui.Cells.TextSettingsCell;
-import org.telegram.ui.Components.AvatarDrawable;
-import org.telegram.ui.Components.AvatarUpdater;
-import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.LayoutHelper;
 
-public class ChangeChatNameActivity extends BaseFragment implements AvatarUpdater.AvatarUpdaterDelegate {
+public class ChangeChatNameActivity extends BaseFragment {
 
-    private EditText nameTextView;
-    private BackupImageView avatarImage;
-    private AvatarDrawable avatarDrawable;
-    private AvatarUpdater avatarUpdater;
+    private EditText firstNameField;
     private View headerLabelView;
-    private TLRPC.InputFile uploadedAvatar;
-    private AlertDialog progressDialog;
-    private int chatId;
+    private int chat_id;
     private View doneButton;
-    private TLRPC.FileLocation avatar;
-    private boolean createAfterUpload;
-    private boolean donePressed;
-    private TLRPC.Chat currentChat;
 
     private final static int done_button = 1;
 
@@ -76,11 +51,7 @@ public class ChangeChatNameActivity extends BaseFragment implements AvatarUpdate
     @Override
     public boolean onFragmentCreate() {
         super.onFragmentCreate();
-        avatarDrawable = new AvatarDrawable();
-        chatId = getArguments().getInt("chat_id", 0);
-        avatarUpdater = new AvatarUpdater();
-        avatarUpdater.parentFragment = this;
-        avatarUpdater.delegate = this;
+        chat_id = getArguments().getInt("chat_id", 0);
         return true;
     }
 
@@ -88,56 +59,14 @@ public class ChangeChatNameActivity extends BaseFragment implements AvatarUpdate
     public View createView(Context context) {
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
-        actionBar.setTitle(LocaleController.getString("ChannelEdit", R.string.ChannelEdit));
+        actionBar.setTitle(LocaleController.getString("EditName", R.string.EditName));
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
                 if (id == -1) {
                     finishFragment();
                 } else if (id == done_button) {
-                    if (donePressed) {
-                        return;
-                    }
-                    if (nameTextView.length() == 0) {
-                        Vibrator v = (Vibrator) getParentActivity().getSystemService(Context.VIBRATOR_SERVICE);
-                        if (v != null) {
-                            v.vibrate(200);
-                        }
-                        AndroidUtilities.shakeView(nameTextView, 2, 0);
-                        return;
-                    }
-                    donePressed = true;
-
-                    if (avatarUpdater.uploadingAvatar != null) {
-                        createAfterUpload = true;
-                        progressDialog = new AlertDialog(getParentActivity(), 1);
-                        progressDialog.setMessage(LocaleController.getString("Loading", R.string.Loading));
-                        progressDialog.setCanceledOnTouchOutside(false);
-                        progressDialog.setCancelable(false);
-                        progressDialog.setButton(DialogInterface.BUTTON_NEGATIVE, LocaleController.getString("Cancel", R.string.Cancel), new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                createAfterUpload = false;
-                                progressDialog = null;
-                                donePressed = false;
-                                try {
-                                    dialog.dismiss();
-                                } catch (Exception e) {
-                                    FileLog.e(e);
-                                }
-                            }
-                        });
-                        progressDialog.show();
-                        return;
-                    }
-                    if (uploadedAvatar != null) {
-                        MessagesController.getInstance().changeChatAvatar(chatId, uploadedAvatar);
-                    } else if (avatar == null && currentChat.photo instanceof TLRPC.TL_chatPhoto) {
-                        MessagesController.getInstance().changeChatAvatar(chatId, null);
-                    }
-                    finishFragment();
-
-                    if (nameTextView.getText().length() != 0) {
+                    if (firstNameField.getText().length() != 0) {
                         saveName();
                         finishFragment();
                     }
@@ -148,11 +77,10 @@ public class ChangeChatNameActivity extends BaseFragment implements AvatarUpdate
         ActionBarMenu menu = actionBar.createMenu();
         doneButton = menu.addItemWithWidth(done_button, R.drawable.ic_done, AndroidUtilities.dp(56));
 
-        currentChat = MessagesController.getInstance().getChat(chatId);
+        TLRPC.Chat currentChat = MessagesController.getInstance().getChat(chat_id);
 
         LinearLayout linearLayout = new LinearLayout(context);
         fragmentView = linearLayout;
-        fragmentView.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
         fragmentView.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         ((LinearLayout) fragmentView).setOrientation(LinearLayout.VERTICAL);
         fragmentView.setOnTouchListener(new View.OnTouchListener() {
@@ -162,147 +90,37 @@ public class ChangeChatNameActivity extends BaseFragment implements AvatarUpdate
             }
         });
 
-        LinearLayout linearLayout2 = new LinearLayout(context);
-        linearLayout2.setOrientation(LinearLayout.VERTICAL);
-        linearLayout2.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-        linearLayout.addView(linearLayout2, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-        FrameLayout frameLayout = new FrameLayout(context);
-        linearLayout2.addView(frameLayout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-        avatarImage = new BackupImageView(context);
-        avatarImage.setRoundRadius(AndroidUtilities.dp(32));
-        avatarDrawable.setInfo(5, null, null, false);
-        avatarDrawable.setDrawPhoto(true);
-        frameLayout.addView(avatarImage, LayoutHelper.createFrame(64, 64, Gravity.TOP | (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT), LocaleController.isRTL ? 0 : 16, 12, LocaleController.isRTL ? 16 : 0, 12));
-        avatarImage.setOnClickListener(new View.OnClickListener() {
+        firstNameField = new EditText(context);
+        firstNameField.setText(currentChat.title);
+        firstNameField.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
+        firstNameField.setHintTextColor(0xff979797);
+        firstNameField.setTextColor(0xff212121);
+        firstNameField.setMaxLines(3);
+        firstNameField.setPadding(0, 0, 0, 0);
+        firstNameField.setGravity(LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT);
+        firstNameField.setInputType(InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT);
+        firstNameField.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        firstNameField.setGravity(LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT);
+        AndroidUtilities.clearCursorDrawable(firstNameField);
+        firstNameField.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             @Override
-            public void onClick(View view) {
-                if (getParentActivity() == null) {
-                    return;
+            public boolean onEditorAction(TextView textView, int i, KeyEvent keyEvent) {
+                if (i == EditorInfo.IME_ACTION_DONE && doneButton != null) {
+                    doneButton.performClick();
+                    return true;
                 }
-                AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
-
-                CharSequence[] items;
-
-                if (avatar != null) {
-                    items = new CharSequence[]{LocaleController.getString("FromCamera", R.string.FromCamera), LocaleController.getString("FromGalley", R.string.FromGalley), LocaleController.getString("DeletePhoto", R.string.DeletePhoto)};
-                } else {
-                    items = new CharSequence[]{LocaleController.getString("FromCamera", R.string.FromCamera), LocaleController.getString("FromGalley", R.string.FromGalley)};
-                }
-
-                builder.setItems(items, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialogInterface, int i) {
-                        if (i == 0) {
-                            avatarUpdater.openCamera();
-                        } else if (i == 1) {
-                            avatarUpdater.openGallery();
-                        } else if (i == 2) {
-                            avatar = null;
-                            uploadedAvatar = null;
-                            avatarImage.setImage(avatar, "50_50", avatarDrawable);
-                        }
-                    }
-                });
-                showDialog(builder.create());
+                return false;
             }
         });
 
-        nameTextView = new EditText(context);
-        if (currentChat.megagroup) {
-            nameTextView.setHint(LocaleController.getString("GroupName", R.string.GroupName));
+        linearLayout.addView(firstNameField, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 36, 24, 24, 24, 0));
+
+        if (chat_id > 0) {
+            firstNameField.setHint(LocaleController.getString("GroupName", R.string.GroupName));
         } else {
-            nameTextView.setHint(LocaleController.getString("EnterChannelName", R.string.EnterChannelName));
+            firstNameField.setHint(LocaleController.getString("EnterListName", R.string.EnterListName));
         }
-        nameTextView.setMaxLines(4);
-        nameTextView.setText(currentChat.title);
-        nameTextView.setGravity(Gravity.CENTER_VERTICAL | (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT));
-        nameTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-        nameTextView.setHint(LocaleController.getString("GroupName", R.string.GroupName));
-        nameTextView.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));
-        nameTextView.setBackgroundDrawable(Theme.createEditTextDrawable(context, false));
-        nameTextView.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
-        nameTextView.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        nameTextView.setPadding(0, 0, 0, AndroidUtilities.dp(8));
-        nameTextView.setFocusable(nameTextView.isEnabled());
-        InputFilter[] inputFilters = new InputFilter[1];
-        inputFilters[0] = new InputFilter.LengthFilter(100);
-        nameTextView.setFilters(inputFilters);
-        AndroidUtilities.clearCursorDrawable(nameTextView);
-        nameTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        frameLayout.addView(nameTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, LocaleController.isRTL ? 16 : 96, 0, LocaleController.isRTL ? 96 : 16, 0));
-        nameTextView.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                avatarDrawable.setInfo(5, nameTextView.length() > 0 ? nameTextView.getText().toString() : null, null, false);
-                avatarImage.invalidate();
-            }
-        });
-
-        ShadowSectionCell sectionCell = new ShadowSectionCell(context);
-        sectionCell.setSize(20);
-        linearLayout.addView(sectionCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-        if (currentChat.creator) {
-            FrameLayout container3 = new FrameLayout(context);
-            container3.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-            linearLayout.addView(container3, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-
-            TextSettingsCell textCell = new TextSettingsCell(context);
-            textCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteRedText5));
-            textCell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
-            textCell.setText(LocaleController.getString("DeleteMega", R.string.DeleteMega), false);
-            container3.addView(textCell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-            textCell.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
-                    builder.setMessage(LocaleController.getString("MegaDeleteAlert", R.string.MegaDeleteAlert));
-                    builder.setTitle(LocaleController.getString("AppName", R.string.AppName));
-                    builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            NotificationCenter.getInstance().removeObserver(this, NotificationCenter.closeChats);
-                            if (AndroidUtilities.isTablet()) {
-                                NotificationCenter.getInstance().postNotificationName(NotificationCenter.closeChats, -(long) chatId);
-                            } else {
-                                NotificationCenter.getInstance().postNotificationName(NotificationCenter.closeChats);
-                            }
-                            MessagesController.getInstance().deleteUserFromChat(chatId, MessagesController.getInstance().getUser(UserConfig.getClientUserId()), null);
-                            finishFragment();
-                        }
-                    });
-                    builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
-                    showDialog(builder.create());
-                }
-            });
-
-            TextInfoPrivacyCell infoCell2 = new TextInfoPrivacyCell(context);
-            infoCell2.setBackgroundDrawable(Theme.getThemedDrawable(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
-            infoCell2.setText(LocaleController.getString("MegaDeleteInfo", R.string.MegaDeleteInfo));
-            linearLayout.addView(infoCell2, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-        } else {
-            sectionCell.setBackgroundDrawable(Theme.getThemedDrawable(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
-        }
-
-        nameTextView.setSelection(nameTextView.length());
-        if (currentChat.photo != null) {
-            avatar = currentChat.photo.photo_small;
-            avatarImage.setImage(avatar, "50_50", avatarDrawable);
-        } else {
-            avatarImage.setImageDrawable(avatarDrawable);
-        }
+        firstNameField.setSelection(firstNameField.length());
 
         return fragmentView;
     }
@@ -313,57 +131,8 @@ public class ChangeChatNameActivity extends BaseFragment implements AvatarUpdate
         SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
         boolean animations = preferences.getBoolean("view_animations", true);
         if (!animations) {
-            nameTextView.requestFocus();
-            AndroidUtilities.showKeyboard(nameTextView);
-        }
-    }
-
-    @Override
-    public void didUploadedPhoto(final TLRPC.InputFile file, final TLRPC.PhotoSize small, final TLRPC.PhotoSize big) {
-        AndroidUtilities.runOnUIThread(new Runnable() {
-            @Override
-            public void run() {
-                uploadedAvatar = file;
-                avatar = small.location;
-                avatarImage.setImage(avatar, "50_50", avatarDrawable);
-                if (createAfterUpload) {
-                    donePressed = false;
-                    try {
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            progressDialog.dismiss();
-                            progressDialog = null;
-                        }
-                    } catch (Exception e) {
-                        FileLog.e(e);
-                    }
-                    doneButton.performClick();
-                }
-            }
-        });
-    }
-
-    @Override
-    public void onActivityResultFragment(int requestCode, int resultCode, Intent data) {
-        avatarUpdater.onActivityResult(requestCode, resultCode, data);
-    }
-
-    @Override
-    public void saveSelfArgs(Bundle args) {
-        if (avatarUpdater != null && avatarUpdater.currentPicturePath != null) {
-            args.putString("path", avatarUpdater.currentPicturePath);
-        }
-        if (nameTextView != null) {
-            String text = nameTextView.getText().toString();
-            if (text != null && text.length() != 0) {
-                args.putString("nameTextView", text);
-            }
-        }
-    }
-
-    @Override
-    public void restoreSelfArgs(Bundle args) {
-        if (avatarUpdater != null) {
-            avatarUpdater.currentPicturePath = args.getString("path");
+            firstNameField.requestFocus();
+            AndroidUtilities.showKeyboard(firstNameField);
         }
     }
 
@@ -373,9 +142,9 @@ public class ChangeChatNameActivity extends BaseFragment implements AvatarUpdate
             AndroidUtilities.runOnUIThread(new Runnable() {
                 @Override
                 public void run() {
-                    if (nameTextView != null) {
-                        nameTextView.requestFocus();
-                        AndroidUtilities.showKeyboard(nameTextView);
+                    if (firstNameField != null) {
+                        firstNameField.requestFocus();
+                        AndroidUtilities.showKeyboard(firstNameField);
                     }
                 }
             }, 100);
@@ -383,6 +152,6 @@ public class ChangeChatNameActivity extends BaseFragment implements AvatarUpdate
     }
 
     private void saveName() {
-        MessagesController.getInstance().changeChatTitle(chatId, nameTextView.getText().toString());
+        MessagesController.getInstance().changeChatTitle(chat_id, firstNameField.getText().toString());
     }
 }

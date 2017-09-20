@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -63,12 +63,12 @@ public class ForegroundDetector implements Application.ActivityLifecycleCallback
             if (System.currentTimeMillis() - enterBackgroundTime < 200) {
                 wasInBackground = false;
             }
-            FileLog.e("switch to foreground");
+            FileLog.e("tmessages", "switch to foreground");
             for (Listener listener : listeners) {
                 try {
                     listener.onBecameForeground();
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
         }
@@ -90,12 +90,12 @@ public class ForegroundDetector implements Application.ActivityLifecycleCallback
         if (--refs == 0) {
             enterBackgroundTime = System.currentTimeMillis();
             wasInBackground = true;
-            FileLog.e("switch to background");
+            FileLog.e("tmessages", "switch to background");
             for (Listener listener : listeners) {
                 try {
                     listener.onBecameBackground();
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
         }

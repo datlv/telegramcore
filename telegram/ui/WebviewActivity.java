@@ -3,13 +3,12 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
 
 import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
@@ -28,11 +27,11 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AnimatorListenerAdapterProxy;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
-import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.browser.Browser;
@@ -41,8 +40,6 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.BaseFragment;
-import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.ActionBar.ThemeDescription;
 import org.telegram.ui.Components.ContextProgressView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.ShareAlert;
@@ -54,7 +51,6 @@ public class WebviewActivity extends BaseFragment {
     private WebView webView;
     private ActionBarMenuItem progressItem;
     private ContextProgressView progressView;
-
     private String currentUrl;
     private String currentBot;
     private String currentGame;
@@ -74,7 +70,7 @@ public class WebviewActivity extends BaseFragment {
                     if (getParentActivity() == null) {
                         return;
                     }
-                    FileLog.e(eventName);
+                    FileLog.e("tmessages", eventName);
                     switch (eventName) {
                         case "share_game":
                             currentMessageObject.messageOwner.with_my_score = false;
@@ -83,22 +79,11 @@ public class WebviewActivity extends BaseFragment {
                             currentMessageObject.messageOwner.with_my_score = true;
                             break;
                     }
-                    showDialog(new ShareAlert(getParentActivity(), currentMessageObject, null, false, linkToCopy, false));
+                    showDialog(new ShareAlert(getParentActivity(), currentMessageObject, null, false, linkToCopy));
                 }
             });
         }
     }
-
-    public Runnable typingRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (currentMessageObject == null || getParentActivity() == null || typingRunnable == null) {
-                return;
-            }
-            MessagesController.getInstance().sendTyping(currentMessageObject.getDialogId(), 6, 0);
-            AndroidUtilities.runOnUIThread(typingRunnable, 25000);
-        }
-    };
 
     public WebviewActivity(String url, String botName, String gameName, String startParam, MessageObject messageObject) {
         super();
@@ -107,14 +92,12 @@ public class WebviewActivity extends BaseFragment {
         currentGame = gameName;
         currentMessageObject = messageObject;
         short_param = startParam;
-        linkToCopy = "https://" + MessagesController.getInstance().linkPrefix + "/" + currentBot + (TextUtils.isEmpty(startParam) ? "" : "?game=" + startParam);
+        linkToCopy = "https://telegram.me/" + currentBot + (TextUtils.isEmpty(startParam) ? "" : "?game=" + startParam);
     }
 
     @Override
     public void onFragmentDestroy() {
         super.onFragmentDestroy();
-        AndroidUtilities.cancelRunOnUIThread(typingRunnable);
-        typingRunnable = null;
         try {
             ViewParent parent = webView.getParent();
             if (parent != null) {
@@ -125,7 +108,7 @@ public class WebviewActivity extends BaseFragment {
             webView.destroy();
             webView = null;
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
     }
 
@@ -144,7 +127,7 @@ public class WebviewActivity extends BaseFragment {
                     finishFragment();
                 } else if (id == share) {
                     currentMessageObject.messageOwner.with_my_score = false;
-                    showDialog(new ShareAlert(getParentActivity(), currentMessageObject, null, false, linkToCopy, false));
+                    showDialog(new ShareAlert(getParentActivity(), currentMessageObject, null, false, linkToCopy));
                 } else if (id == open_in) {
                     openGameInBrowser(currentUrl, currentMessageObject, getParentActivity(), short_param, currentBot);
                 }
@@ -157,7 +140,7 @@ public class WebviewActivity extends BaseFragment {
         progressItem.getImageView().setVisibility(View.INVISIBLE);
 
         ActionBarMenuItem menuItem = menu.addItem(0, R.drawable.ic_ab_other);
-        menuItem.addSubItem(open_in, LocaleController.getString("OpenInExternalApp", R.string.OpenInExternalApp));
+        menuItem.addSubItem(open_in, LocaleController.getString("OpenInExternalApp", R.string.OpenInExternalApp), 0);
 
         webView = new WebView(context);
         webView.getSettings().setJavaScriptEnabled(true);
@@ -193,7 +176,7 @@ public class WebviewActivity extends BaseFragment {
                         ObjectAnimator.ofFloat(progressItem.getImageView(), "scaleX", 0.0f, 1.0f),
                         ObjectAnimator.ofFloat(progressItem.getImageView(), "scaleY", 0.0f, 1.0f),
                         ObjectAnimator.ofFloat(progressItem.getImageView(), "alpha", 0.0f, 1.0f));
-                animatorSet.addListener(new AnimatorListenerAdapter() {
+                animatorSet.addListener(new AnimatorListenerAdapterProxy() {
                     @Override
                     public void onAnimationEnd(Animator animator) {
                         progressView.setVisibility(View.INVISIBLE);
@@ -207,13 +190,6 @@ public class WebviewActivity extends BaseFragment {
         frameLayout.addView(webView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
         return fragmentView;
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        AndroidUtilities.cancelRunOnUIThread(typingRunnable);
-        typingRunnable.run();
     }
 
     @Override
@@ -268,28 +244,11 @@ public class WebviewActivity extends BaseFragment {
             SerializedData serializedData = new SerializedData(messageObject.messageOwner.getObjectSize());
             messageObject.messageOwner.serializeToStream(serializedData);
             editor.putString(hash + "_m", Utilities.bytesToHex(serializedData.toByteArray()));
-            editor.putString(hash + "_link", "https://" + MessagesController.getInstance().linkPrefix + "/" + username + (TextUtils.isEmpty(short_name) ? "" : "?game=" + short_name));
+            editor.putString(hash + "_link", "https://telegram.me/" + username + (TextUtils.isEmpty(short_name) ? "" : "?game=" + short_name));
             editor.commit();
             Browser.openUrl(parentActivity, url, false);
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
-    }
-
-    @Override
-    public ThemeDescription[] getThemeDescriptions() {
-        return new ThemeDescription[]{
-                new ThemeDescription(fragmentView, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundWhite),
-
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_actionBarDefault),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_ITEMSCOLOR, null, null, null, null, Theme.key_actionBarDefaultIcon),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_TITLECOLOR, null, null, null, null, Theme.key_actionBarDefaultTitle),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SELECTORCOLOR, null, null, null, null, Theme.key_actionBarDefaultSelector),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SUBMENUBACKGROUND, null, null, null, null, Theme.key_actionBarDefaultSubmenuBackground),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SUBMENUITEM, null, null, null, null, Theme.key_actionBarDefaultSubmenuItem),
-
-                new ThemeDescription(progressView, 0, null, null, null, null, Theme.key_contextProgressInner2),
-                new ThemeDescription(progressView, 0, null, null, null, null, Theme.key_contextProgressOuter2),
-        };
     }
 }

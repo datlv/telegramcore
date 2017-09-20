@@ -3,14 +3,12 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
 
 import android.content.Context;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffColorFilter;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.widget.ImageView;
@@ -22,13 +20,9 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.Theme;
 
-import java.util.ArrayList;
-
 public class ChatBigEmptyView extends LinearLayout {
 
     private TextView secretViewStatusTextView;
-    private ArrayList<TextView> textViews = new ArrayList<>();
-    private ArrayList<ImageView> imageViews = new ArrayList<>();
 
     public ChatBigEmptyView(Context context, boolean secretChat) {
         super(context);
@@ -41,10 +35,9 @@ public class ChatBigEmptyView extends LinearLayout {
         if (secretChat) {
             secretViewStatusTextView = new TextView(context);
             secretViewStatusTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-            secretViewStatusTextView.setTextColor(Theme.getColor(Theme.key_chat_serviceText));
+            secretViewStatusTextView.setTextColor(Theme.SECRET_CHAT_INFO_TEXT_COLOR);
             secretViewStatusTextView.setGravity(Gravity.CENTER_HORIZONTAL);
             secretViewStatusTextView.setMaxWidth(AndroidUtilities.dp(210));
-            textViews.add(secretViewStatusTextView);
             addView(secretViewStatusTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP));
         } else {
             ImageView imageView = new ImageView(context);
@@ -62,8 +55,7 @@ public class ChatBigEmptyView extends LinearLayout {
             textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
             textView.setGravity(Gravity.CENTER_HORIZONTAL);
         }
-        textView.setTextColor(Theme.getColor(Theme.key_chat_serviceText));
-        textViews.add(textView);
+        textView.setTextColor(Theme.SECRET_CHAT_INFO_TEXT_COLOR);
         textView.setMaxWidth(AndroidUtilities.dp(260));
         addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (secretChat ? (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) : Gravity.CENTER_HORIZONTAL) | Gravity.TOP, 0, 8, 0, secretChat ? 0 : 8));
 
@@ -73,14 +65,11 @@ public class ChatBigEmptyView extends LinearLayout {
             addView(linearLayout, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT, 0, 8, 0, 0));
 
             ImageView imageView = new ImageView(context);
-            imageView.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_chat_serviceText), PorterDuff.Mode.MULTIPLY));
             imageView.setImageResource(secretChat ? R.drawable.ic_lock_white : R.drawable.list_circle);
-            imageViews.add(imageView);
 
             textView = new TextView(context);
             textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-            textView.setTextColor(Theme.getColor(Theme.key_chat_serviceText));
-            textViews.add(textView);
+            textView.setTextColor(Theme.SECRET_CHAT_INFO_TEXT_COLOR);
             textView.setGravity(Gravity.CENTER_VERTICAL | (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT));
             textView.setMaxWidth(AndroidUtilities.dp(260));
 
@@ -130,15 +119,6 @@ public class ChatBigEmptyView extends LinearLayout {
                 }
                 linearLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
             }
-        }
-    }
-
-    public void setTextColor(int color) {
-        for (int a = 0; a < textViews.size(); a++) {
-            textViews.get(a).setTextColor(color);
-        }
-        for (int a = 0; a < imageViews.size(); a++) {
-            imageViews.get(a).setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_chat_serviceText), PorterDuff.Mode.MULTIPLY));
         }
     }
 

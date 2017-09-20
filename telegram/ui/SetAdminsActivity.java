@@ -3,18 +3,19 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
 
 import android.content.Context;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ListView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ContactsController;
@@ -25,21 +26,17 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
-import org.telegram.messenger.support.widget.LinearLayoutManager;
-import org.telegram.messenger.support.widget.RecyclerView;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.BaseFragment;
-import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.ActionBar.ThemeDescription;
+import org.telegram.ui.Adapters.BaseFragmentAdapter;
 import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Cells.UserCell;
 import org.telegram.ui.Components.EmptyTextProgressView;
 import org.telegram.ui.Components.LayoutHelper;
-import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -51,8 +48,8 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
 
     private ListAdapter listAdapter;
     private SearchAdapter searchAdapter;
-    private EmptyTextProgressView emptyView;
-    private RecyclerListView listView;
+    private EmptyTextProgressView searchEmptyView;
+    private ListView listView;
     private TLRPC.ChatFull info;
     private ArrayList<TLRPC.ChatParticipant> participants = new ArrayList<>();
     private int chat_id;
@@ -109,7 +106,7 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
             @Override
             public void onSearchExpand() {
                 searching = true;
-                listView.setEmptyView(emptyView);
+                listView.setEmptyView(searchEmptyView);
             }
 
             @Override
@@ -118,9 +115,10 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                 searchWas = false;
                 if (listView != null) {
                     listView.setEmptyView(null);
-                    emptyView.setVisibility(View.GONE);
+                    searchEmptyView.setVisibility(View.GONE);
                     if (listView.getAdapter() != listAdapter) {
                         listView.setAdapter(listAdapter);
+                        fragmentView.setBackgroundColor(0xfff0f0f0);
                     }
                 }
                 if (searchAdapter != null) {
@@ -135,11 +133,11 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                     searchWas = true;
                     if (searchAdapter != null && listView.getAdapter() != searchAdapter) {
                         listView.setAdapter(searchAdapter);
-                        fragmentView.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                        fragmentView.setBackgroundColor(0xffffffff);
                     }
-                    if (emptyView != null && listView.getEmptyView() != emptyView) {
-                        emptyView.showTextView();
-                        listView.setEmptyView(emptyView);
+                    if (searchEmptyView != null && listView.getEmptyView() != searchEmptyView) {
+                        searchEmptyView.showTextView();
+                        listView.setEmptyView(searchEmptyView);
                     }
                 }
                 if (searchAdapter != null) {
@@ -154,23 +152,25 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
 
         fragmentView = new FrameLayout(context);
         FrameLayout frameLayout = (FrameLayout) fragmentView;
-        fragmentView.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
+        fragmentView.setBackgroundColor(0xfff0f0f0);
 
-        listView = new RecyclerListView(context);
-        listView.setLayoutManager(new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false));
+        listView = new ListView(context);
+        listView.setDivider(null);
+        listView.setDividerHeight(0);
         listView.setVerticalScrollBarEnabled(false);
+        listView.setDrawSelectorOnTop(true);
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         listView.setAdapter(listAdapter);
-        listView.setOnItemClickListener(new RecyclerListView.OnItemClickListener() {
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
-            public void onItemClick(View view, int position) {
-                if (listView.getAdapter() == searchAdapter || position >= usersStartRow && position < usersEndRow) {
+            public void onItemClick(AdapterView<?> adapterView, View view, final int i, long l) {
+                if (listView.getAdapter() == searchAdapter || i >= usersStartRow && i < usersEndRow) {
                     UserCell userCell = (UserCell) view;
                     chat = MessagesController.getInstance().getChat(chat_id);
                     TLRPC.ChatParticipant participant;
                     int index = -1;
                     if (listView.getAdapter() == searchAdapter) {
-                        participant = searchAdapter.getItem(position);
+                        participant = searchAdapter.getItem(i);
                         for (int a = 0; a < participants.size(); a++) {
                             TLRPC.ChatParticipant p = participants.get(a);
                             if (p.user_id == participant.user_id) {
@@ -179,7 +179,7 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                             }
                         }
                     } else {
-                        participant = participants.get(index = position - usersStartRow);
+                        participant = participants.get(index = i - usersStartRow);
                     }
                     if (index != -1 && !(participant instanceof TLRPC.TL_chatParticipantCreator)) {
                         TLRPC.ChatParticipant newParticipant;
@@ -200,7 +200,7 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                             info.participants.participants.set(index, newParticipant);
                         }
                         if (listView.getAdapter() == searchAdapter) {
-                            searchAdapter.searchResult.set(position, newParticipant);
+                            searchAdapter.searchResult.set(i, newParticipant);
                         }
                         participant = newParticipant;
                         userCell.setChecked(!(participant instanceof TLRPC.TL_chatParticipant) || chat != null && !chat.admins_enabled, true);
@@ -209,7 +209,7 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                         }
                     }
                 } else {
-                    if (position == allAdminsRow) {
+                    if (i == allAdminsRow) {
                         chat = MessagesController.getInstance().getChat(chat_id);
                         if (chat != null) {
                             chat.admins_enabled = !chat.admins_enabled;
@@ -221,12 +221,12 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
             }
         });
 
-        emptyView = new EmptyTextProgressView(context);
-        emptyView.setVisibility(View.GONE);
-        emptyView.setShowAtCenter(true);
-        emptyView.setText(LocaleController.getString("NoResult", R.string.NoResult));
-        frameLayout.addView(emptyView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-        emptyView.showTextView();
+        searchEmptyView = new EmptyTextProgressView(context);
+        searchEmptyView.setVisibility(View.GONE);
+        searchEmptyView.setShowAtCenter(true);
+        searchEmptyView.setText(LocaleController.getString("NoResult", R.string.NoResult));
+        frameLayout.addView(searchEmptyView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        searchEmptyView.showTextView();
 
         updateRowsIds();
 
@@ -242,7 +242,7 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                 updateChatParticipants();
                 updateRowsIds();
             }
-        } else if (id == NotificationCenter.updateInterfaces) {
+        } if (id == NotificationCenter.updateInterfaces) {
             int mask = (Integer) args[0];
             if ((mask & MessagesController.UPDATE_MASK_AVATAR) != 0 || (mask & MessagesController.UPDATE_MASK_NAME) != 0 || (mask & MessagesController.UPDATE_MASK_STATUS) != 0) {
                 if (listView != null) {
@@ -333,7 +333,7 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                     }
                 });
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
         }
     }
@@ -361,8 +361,7 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
         }
     }
 
-    private class ListAdapter extends RecyclerListView.SelectionAdapter {
-
+    private class ListAdapter extends BaseFragmentAdapter {
         private Context mContext;
 
         public ListAdapter(Context context) {
@@ -370,12 +369,16 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
         }
 
         @Override
-        public boolean isEnabled(RecyclerView.ViewHolder holder) {
-            int position = holder.getAdapterPosition();
-            if (position == allAdminsRow) {
+        public boolean areAllItemsEnabled() {
+            return false;
+        }
+
+        @Override
+        public boolean isEnabled(int i) {
+            if (i == allAdminsRow) {
                 return true;
-            } else if (position >= usersStartRow && position < usersEndRow) {
-                TLRPC.ChatParticipant participant = participants.get(position - usersStartRow);
+            } else if (i >= usersStartRow && i < usersEndRow) {
+                TLRPC.ChatParticipant participant = participants.get(i - usersStartRow);
                 if (!(participant instanceof TLRPC.TL_chatParticipantCreator)) {
                     return true;
                 }
@@ -384,66 +387,69 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
         }
 
         @Override
-        public int getItemCount() {
+        public int getCount() {
             return rowCount;
         }
 
         @Override
-        public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            View view;
-            switch (viewType) {
-                case 0:
-                    view = new TextCheckCell(mContext);
-                    view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-                    break;
-                case 1:
-                    view = new TextInfoPrivacyCell(mContext);
-                    break;
-                case 2:
-                default:
-                    view = new UserCell(mContext, 1, 2, false);
-                    view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-                    break;
-            }
-            return new RecyclerListView.Holder(view);
+        public Object getItem(int i) {
+            return null;
         }
 
         @Override
-        public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
-            switch (holder.getItemViewType()) {
-                case 0:
-                    TextCheckCell checkCell = (TextCheckCell) holder.itemView;
-                    chat = MessagesController.getInstance().getChat(chat_id);
-                    checkCell.setTextAndCheck(LocaleController.getString("SetAdminsAll", R.string.SetAdminsAll), chat != null && !chat.admins_enabled, false);
-                    break;
-                case 1:
-                    TextInfoPrivacyCell privacyCell = (TextInfoPrivacyCell) holder.itemView;
-                    if (position == allAdminsInfoRow) {
-                        if (chat.admins_enabled) {
-                            privacyCell.setText(LocaleController.getString("SetAdminsNotAllInfo", R.string.SetAdminsNotAllInfo));
-                        } else {
-                            privacyCell.setText(LocaleController.getString("SetAdminsAllInfo", R.string.SetAdminsAllInfo));
-                        }
-                        if (usersStartRow != -1) {
-                            privacyCell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
-                        } else {
-                            privacyCell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
-                        }
-                    } else if (position == usersEndRow) {
-                        privacyCell.setText("");
-                        privacyCell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+        public long getItemId(int i) {
+            return i;
+        }
+
+        @Override
+        public boolean hasStableIds() {
+            return false;
+        }
+
+        @Override
+        public View getView(int i, View view, ViewGroup viewGroup) {
+            int type = getItemViewType(i);
+            if (type == 0) {
+                if (view == null) {
+                    view = new TextCheckCell(mContext);
+                    view.setBackgroundColor(0xffffffff);
+                }
+                TextCheckCell checkCell = (TextCheckCell) view;
+                chat = MessagesController.getInstance().getChat(chat_id);
+                checkCell.setTextAndCheck(LocaleController.getString("SetAdminsAll", R.string.SetAdminsAll), chat != null && !chat.admins_enabled, false);
+            } else if (type == 1) {
+                if (view == null) {
+                    view = new TextInfoPrivacyCell(mContext);
+                }
+                if (i == allAdminsInfoRow) {
+                    if (chat.admins_enabled) {
+                        ((TextInfoPrivacyCell) view).setText(LocaleController.getString("SetAdminsNotAllInfo", R.string.SetAdminsNotAllInfo));
+                    } else {
+                        ((TextInfoPrivacyCell) view).setText(LocaleController.getString("SetAdminsAllInfo", R.string.SetAdminsAllInfo));
                     }
-                    break;
-                case 2:
-                    UserCell userCell = (UserCell) holder.itemView;
-                    TLRPC.ChatParticipant part = participants.get(position - usersStartRow);
-                    TLRPC.User user = MessagesController.getInstance().getUser(part.user_id);
-                    userCell.setData(user, null, null, 0);
-                    chat = MessagesController.getInstance().getChat(chat_id);
-                    userCell.setChecked(!(part instanceof TLRPC.TL_chatParticipant) || chat != null && !chat.admins_enabled, false);
-                    userCell.setCheckDisabled(chat == null || !chat.admins_enabled || part.user_id == UserConfig.getClientUserId());
-                    break;
+                    if (usersStartRow != -1) {
+                        view.setBackgroundResource(R.drawable.greydivider);
+                    } else {
+                        view.setBackgroundResource(R.drawable.greydivider_bottom);
+                    }
+                } else if (i == usersEndRow) {
+                    ((TextInfoPrivacyCell) view).setText("");
+                    view.setBackgroundResource(R.drawable.greydivider_bottom);
+                }
+            } else if (type == 2) {
+                if (view == null) {
+                    view = new UserCell(mContext, 1, 2, false);
+                    view.setBackgroundColor(0xffffffff);
+                }
+                UserCell userCell = (UserCell) view;
+                TLRPC.ChatParticipant part = participants.get(i - usersStartRow);
+                TLRPC.User user = MessagesController.getInstance().getUser(part.user_id);
+                userCell.setData(user, null, null, 0);
+                chat = MessagesController.getInstance().getChat(chat_id);
+                userCell.setChecked(!(part instanceof TLRPC.TL_chatParticipant) || chat != null && !chat.admins_enabled, false);
+                userCell.setCheckDisabled(chat == null || !chat.admins_enabled || part.user_id == UserConfig.getClientUserId());
             }
+            return view;
         }
 
         @Override
@@ -456,9 +462,19 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                 return 2;
             }
         }
+
+        @Override
+        public int getViewTypeCount() {
+            return 3;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return false;
+        }
     }
 
-    public class SearchAdapter extends RecyclerListView.SelectionAdapter {
+    public class SearchAdapter extends BaseFragmentAdapter {
 
         private Context mContext;
         private ArrayList<TLRPC.ChatParticipant> searchResult = new ArrayList<>();
@@ -475,7 +491,7 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                     searchTimer.cancel();
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
             if (query == null) {
                 searchResult.clear();
@@ -490,7 +506,7 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                             searchTimer.cancel();
                             searchTimer = null;
                         } catch (Exception e) {
-                            FileLog.e(e);
+                            FileLog.e("tmessages", e);
                         }
                         processSearch(query);
                     }
@@ -577,34 +593,49 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
         }
 
         @Override
-        public boolean isEnabled(RecyclerView.ViewHolder holder) {
+        public boolean areAllItemsEnabled() {
             return true;
         }
 
         @Override
-        public int getItemCount() {
+        public boolean isEnabled(int i) {
+            return true;
+        }
+
+        @Override
+        public int getCount() {
             return searchResult.size();
         }
 
+        @Override
         public TLRPC.ChatParticipant getItem(int i) {
             return searchResult.get(i);
         }
 
         @Override
-        public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            return new RecyclerListView.Holder(new UserCell(mContext, 1, 2, false));
+        public long getItemId(int i) {
+            return i;
         }
 
         @Override
-        public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
-            TLRPC.ChatParticipant participant = getItem(position);
+        public boolean hasStableIds() {
+            return true;
+        }
+
+        @Override
+        public View getView(int i, View view, ViewGroup viewGroup) {
+            if (view == null) {
+                view = new UserCell(mContext, 1, 2, false);
+            }
+
+            TLRPC.ChatParticipant participant = getItem(i);
             TLRPC.User user = MessagesController.getInstance().getUser(participant.user_id);
             String un = user.username;
 
             CharSequence username = null;
             CharSequence name = null;
-            if (position < searchResult.size()) {
-                name = searchResultNames.get(position);
+            if (i < searchResult.size()) {
+                name = searchResultNames.get(i);
                 if (name != null && un != null && un.length() > 0) {
                     if (name.toString().startsWith("@" + un)) {
                         username = name;
@@ -612,76 +643,27 @@ public class SetAdminsActivity extends BaseFragment implements NotificationCente
                     }
                 }
             }
-            UserCell userCell = (UserCell) holder.itemView;
+            UserCell userCell = (UserCell) view;
             userCell.setData(user, name, username, 0);
             chat = MessagesController.getInstance().getChat(chat_id);
             userCell.setChecked(!(participant instanceof TLRPC.TL_chatParticipant) || chat != null && !chat.admins_enabled, false);
             userCell.setCheckDisabled(chat == null || !chat.admins_enabled || participant.user_id == UserConfig.getClientUserId());
+            return view;
         }
 
         @Override
         public int getItemViewType(int i) {
             return 0;
         }
-    }
 
-    @Override
-    public ThemeDescription[] getThemeDescriptions() {
-        ThemeDescription.ThemeDescriptionDelegate сellDelegate = new ThemeDescription.ThemeDescriptionDelegate() {
-            @Override
-            public void didSetColor(int color) {
-                int count = listView.getChildCount();
-                for (int a = 0; a < count; a++) {
-                    View child = listView.getChildAt(a);
-                    if (child instanceof UserCell) {
-                        ((UserCell) child).update(0);
-                    }
-                }
-            }
-        };
+        @Override
+        public int getViewTypeCount() {
+            return 1;
+        }
 
-        return new ThemeDescription[]{
-                new ThemeDescription(listView, ThemeDescription.FLAG_CELLBACKGROUNDCOLOR, new Class[]{TextCheckCell.class, UserCell.class}, null, null, null, Theme.key_windowBackgroundWhite),
-                new ThemeDescription(fragmentView, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundGray),
-
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_actionBarDefault),
-                new ThemeDescription(listView, ThemeDescription.FLAG_LISTGLOWCOLOR, null, null, null, null, Theme.key_actionBarDefault),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_ITEMSCOLOR, null, null, null, null, Theme.key_actionBarDefaultIcon),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_TITLECOLOR, null, null, null, null, Theme.key_actionBarDefaultTitle),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SELECTORCOLOR, null, null, null, null, Theme.key_actionBarDefaultSelector),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SEARCH, null, null, null, null, Theme.key_actionBarDefaultSearch),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SEARCHPLACEHOLDER, null, null, null, null, Theme.key_actionBarDefaultSearchPlaceholder),
-
-                new ThemeDescription(listView, ThemeDescription.FLAG_SELECTOR, null, null, null, null, Theme.key_listSelector),
-
-                new ThemeDescription(listView, 0, new Class[]{View.class}, Theme.dividerPaint, null, null, Theme.key_divider),
-
-                new ThemeDescription(emptyView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_emptyListPlaceholder),
-
-                new ThemeDescription(listView, 0, new Class[]{TextCheckCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlackText),
-                new ThemeDescription(listView, 0, new Class[]{TextCheckCell.class}, new String[]{"checkBox"}, null, null, null, Theme.key_switchThumb),
-                new ThemeDescription(listView, 0, new Class[]{TextCheckCell.class}, new String[]{"checkBox"}, null, null, null, Theme.key_switchTrack),
-                new ThemeDescription(listView, 0, new Class[]{TextCheckCell.class}, new String[]{"checkBox"}, null, null, null, Theme.key_switchThumbChecked),
-                new ThemeDescription(listView, 0, new Class[]{TextCheckCell.class}, new String[]{"checkBox"}, null, null, null, Theme.key_switchTrackChecked),
-
-                new ThemeDescription(listView, ThemeDescription.FLAG_BACKGROUNDFILTER, new Class[]{TextInfoPrivacyCell.class}, null, null, null, Theme.key_windowBackgroundGrayShadow),
-                new ThemeDescription(listView, 0, new Class[]{TextInfoPrivacyCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText4),
-
-                new ThemeDescription(listView, 0, new Class[]{UserCell.class}, null, null, null, Theme.key_checkboxSquareUnchecked),
-                new ThemeDescription(listView, 0, new Class[]{UserCell.class}, null, null, null, Theme.key_checkboxSquareDisabled),
-                new ThemeDescription(listView, 0, new Class[]{UserCell.class}, null, null, null, Theme.key_checkboxSquareBackground),
-                new ThemeDescription(listView, 0, new Class[]{UserCell.class}, null, null, null, Theme.key_checkboxSquareCheck),
-                new ThemeDescription(listView, 0, new Class[]{UserCell.class}, new String[]{"nameTextView"}, null, null, null, Theme.key_windowBackgroundWhiteBlackText),
-                new ThemeDescription(listView, 0, new Class[]{UserCell.class}, new String[]{"statusColor"}, null, null, сellDelegate, Theme.key_windowBackgroundWhiteGrayText),
-                new ThemeDescription(listView, 0, new Class[]{UserCell.class}, new String[]{"statusOnlineColor"}, null, null, сellDelegate, Theme.key_windowBackgroundWhiteBlueText),
-                new ThemeDescription(listView, 0, new Class[]{UserCell.class}, null, new Drawable[]{Theme.avatar_photoDrawable, Theme.avatar_broadcastDrawable}, null, Theme.key_avatar_text),
-                new ThemeDescription(null, 0, null, null, null, сellDelegate, Theme.key_avatar_backgroundRed),
-                new ThemeDescription(null, 0, null, null, null, сellDelegate, Theme.key_avatar_backgroundOrange),
-                new ThemeDescription(null, 0, null, null, null, сellDelegate, Theme.key_avatar_backgroundViolet),
-                new ThemeDescription(null, 0, null, null, null, сellDelegate, Theme.key_avatar_backgroundGreen),
-                new ThemeDescription(null, 0, null, null, null, сellDelegate, Theme.key_avatar_backgroundCyan),
-                new ThemeDescription(null, 0, null, null, null, сellDelegate, Theme.key_avatar_backgroundBlue),
-                new ThemeDescription(null, 0, null, null, null, сellDelegate, Theme.key_avatar_backgroundPink),
-        };
+        @Override
+        public boolean isEmpty() {
+            return searchResult.isEmpty();
+        }
     }
 }

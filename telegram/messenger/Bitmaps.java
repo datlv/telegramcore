@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
@@ -180,7 +180,7 @@ public class Bitmaps {
         if (config != null) {
             switch (config) {
                 case RGB_565:
-                    newConfig = Bitmap.Config.ARGB_8888;
+                    newConfig = Bitmap.Config.RGB_565;
                     break;
                 case ALPHA_8:
                     newConfig = Bitmap.Config.ALPHA_8;

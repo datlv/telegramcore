@@ -3,13 +3,12 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.ActionBar;
 
 import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
@@ -32,6 +31,7 @@ import android.widget.ListView;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
+import org.telegram.messenger.AnimatorListenerAdapterProxy;
 
 public class DrawerLayoutContainer extends FrameLayout {
 
@@ -48,8 +48,6 @@ public class DrawerLayoutContainer extends FrameLayout {
     private VelocityTracker velocityTracker;
     private boolean beginTrackingSent;
     private AnimatorSet currentAnimation;
-
-    private int paddingTop;
 
     private Paint scrimPaint = new Paint();
 
@@ -178,7 +176,7 @@ public class DrawerLayoutContainer extends FrameLayout {
         } else {
             animatorSet.setDuration(300);
         }
-        animatorSet.addListener(new AnimatorListenerAdapter() {
+        animatorSet.addListener(new AnimatorListenerAdapterProxy() {
             @Override
             public void onAnimationEnd(Animator animator) {
                 onDrawerAnimationEnd(true);
@@ -200,7 +198,7 @@ public class DrawerLayoutContainer extends FrameLayout {
         } else {
             animatorSet.setDuration(300);
         }
-        animatorSet.addListener(new AnimatorListenerAdapter() {
+        animatorSet.addListener(new AnimatorListenerAdapterProxy() {
             @Override
             public void onAnimationEnd(Animator animator) {
                 onDrawerAnimationEnd(false);
@@ -335,9 +333,11 @@ public class DrawerLayoutContainer extends FrameLayout {
                         } else {
                             closeDrawer(drawerOpened && Math.abs(velX) >= 3500);
                         }
+                        startedTracking = false;
+                    } else {
+                        maybeStartTracking = false;
+                        startedTracking = false;
                     }
-                    startedTracking = false;
-                    maybeStartTracking = false;
                     if (velocityTracker != null) {
                         velocityTracker.recycle();
                         velocityTracker = null;
@@ -377,12 +377,12 @@ public class DrawerLayoutContainer extends FrameLayout {
 
             try {
                 if (drawerLayout != child) {
-                    child.layout(lp.leftMargin, lp.topMargin + getPaddingTop(), lp.leftMargin + child.getMeasuredWidth(), lp.topMargin + child.getMeasuredHeight() + getPaddingTop());
+                    child.layout(lp.leftMargin, lp.topMargin, lp.leftMargin + child.getMeasuredWidth(), lp.topMargin + child.getMeasuredHeight());
                 } else {
-                    child.layout(-child.getMeasuredWidth(), lp.topMargin + getPaddingTop(), 0, lp.topMargin + child.getMeasuredHeight() +  + getPaddingTop());
+                    child.layout(-child.getMeasuredWidth(), lp.topMargin, 0, lp.topMargin + child.getMeasuredHeight());
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
         }
         inLayout = false;
@@ -393,7 +393,7 @@ public class DrawerLayoutContainer extends FrameLayout {
         if (!inLayout) {
             /*StackTraceElement[] elements = Thread.currentThread().getStackTrace();
             for (int a = 0; a < elements.length; a++) {
-                FileLog.d("on " + elements[a]);
+                FileLog.d("tmessages", "on " + elements[a]);
             }*/
             super.requestLayout();
         }
@@ -406,20 +406,6 @@ public class DrawerLayoutContainer extends FrameLayout {
         int heightSize = MeasureSpec.getSize(heightMeasureSpec);
 
         setMeasuredDimension(widthSize, heightSize);
-        if (Build.VERSION.SDK_INT < 21) {
-            inLayout = true;
-            if (heightSize == AndroidUtilities.displaySize.y + AndroidUtilities.statusBarHeight) {
-                if (getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
-                    setPadding(0, AndroidUtilities.statusBarHeight, 0, 0);
-                }
-                heightSize = AndroidUtilities.displaySize.y;
-            } else {
-                if (getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
-                    setPadding(0, 0, 0, 0);
-                }
-            }
-            inLayout = false;
-        }
 
         final boolean applyInsets = lastInsets != null && Build.VERSION.SDK_INT >= 21;
 

@@ -3,13 +3,14 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Cells;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -21,7 +22,6 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.LayoutHelper;
 
 import java.util.Locale;
@@ -33,9 +33,16 @@ public class SessionCell extends FrameLayout {
     private TextView detailTextView;
     private TextView detailExTextView;
     boolean needDivider;
+    private static Paint paint;
 
     public SessionCell(Context context) {
         super(context);
+
+        if (paint == null) {
+            paint = new Paint();
+            paint.setColor(0xffd9d9d9);
+            paint.setStrokeWidth(1);
+        }
 
         LinearLayout linearLayout = new LinearLayout(context);
         linearLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -43,7 +50,7 @@ public class SessionCell extends FrameLayout {
         addView(linearLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 30, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, 17, 11, 11, 0));
 
         nameTextView = new TextView(context);
-        nameTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        nameTextView.setTextColor(0xff212121);
         nameTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         nameTextView.setLines(1);
         nameTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
@@ -65,7 +72,7 @@ public class SessionCell extends FrameLayout {
         }
 
         detailTextView = new TextView(context);
-        detailTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        detailTextView.setTextColor(0xff212121);
         detailTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         detailTextView.setLines(1);
         detailTextView.setMaxLines(1);
@@ -75,7 +82,7 @@ public class SessionCell extends FrameLayout {
         addView(detailTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, 17, 36, 17, 0));
 
         detailExTextView = new TextView(context);
-        detailExTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText3));
+        detailExTextView.setTextColor(0xff999999);
         detailExTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         detailExTextView.setLines(1);
         detailExTextView.setMaxLines(1);
@@ -87,7 +94,7 @@ public class SessionCell extends FrameLayout {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        super.onMeasure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(90) + (needDivider ? 1 : 0), MeasureSpec.EXACTLY));
+        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(90) + (needDivider ? 1 : 0), MeasureSpec.EXACTLY));
     }
 
     public void setSession(TLRPC.TL_authorization session, boolean divider) {
@@ -95,13 +102,11 @@ public class SessionCell extends FrameLayout {
 
         nameTextView.setText(String.format(Locale.US, "%s %s", session.app_name, session.app_version));
         if ((session.flags & 1) != 0) {
-            setTag(Theme.key_windowBackgroundWhiteValueText);
             onlineTextView.setText(LocaleController.getString("Online", R.string.Online));
-            onlineTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteValueText));
+            onlineTextView.setTextColor(0xff2f8cc9);
         } else {
-            setTag(Theme.key_windowBackgroundWhiteGrayText3);
             onlineTextView.setText(LocaleController.stringForMessageListDate(session.date_active));
-            onlineTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText3));
+            onlineTextView.setTextColor(0xff999999);
         }
 
         StringBuilder stringBuilder = new StringBuilder();
@@ -152,7 +157,7 @@ public class SessionCell extends FrameLayout {
     @Override
     protected void onDraw(Canvas canvas) {
         if (needDivider) {
-            canvas.drawLine(getPaddingLeft(), getHeight() - 1, getWidth() - getPaddingRight(), getHeight() - 1, Theme.dividerPaint);
+            canvas.drawLine(getPaddingLeft(), getHeight() - 1, getWidth() - getPaddingRight(), getHeight() - 1, paint);
         }
     }
 }

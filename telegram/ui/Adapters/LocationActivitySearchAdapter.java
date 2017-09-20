@@ -3,18 +3,17 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Adapters;
 
 import android.content.Context;
+import android.view.View;
 import android.view.ViewGroup;
 
-import org.telegram.messenger.support.widget.RecyclerView;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Cells.LocationCell;
-import org.telegram.ui.Components.RecyclerListView;
 
 public class LocationActivitySearchAdapter extends BaseLocationAdapter {
 
@@ -26,20 +25,25 @@ public class LocationActivitySearchAdapter extends BaseLocationAdapter {
     }
 
     @Override
-    public int getItemCount() {
+    public int getCount() {
         return places.size();
     }
 
     @Override
-    public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        return new RecyclerListView.Holder(new LocationCell(mContext));
+    public boolean isEmpty() {
+        return places.isEmpty();
     }
 
     @Override
-    public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
-        ((LocationCell) holder.itemView).setLocation(places.get(position), iconUrls.get(position), position != places.size() - 1);
+    public View getView(int i, View view, ViewGroup viewGroup) {
+        if (view == null) {
+            view = new LocationCell(mContext);
+        }
+        ((LocationCell) view).setLocation(places.get(i), iconUrls.get(i), i != places.size() - 1);
+        return view;
     }
 
+    @Override
     public TLRPC.TL_messageMediaVenue getItem(int i) {
         if (i >= 0 && i < places.size()) {
             return places.get(i);
@@ -48,7 +52,32 @@ public class LocationActivitySearchAdapter extends BaseLocationAdapter {
     }
 
     @Override
-    public boolean isEnabled(RecyclerView.ViewHolder holder) {
+    public long getItemId(int i) {
+        return i;
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        return 0;
+    }
+
+    @Override
+    public int getViewTypeCount() {
+        return 4;
+    }
+
+    @Override
+    public boolean areAllItemsEnabled() {
+        return false;
+    }
+
+    @Override
+    public boolean isEnabled(int position) {
+        return true;
+    }
+
+    @Override
+    public boolean hasStableIds() {
         return true;
     }
 }

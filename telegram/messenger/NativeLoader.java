@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
@@ -23,7 +23,7 @@ import java.util.zip.ZipFile;
 
 public class NativeLoader {
 
-    private final static int LIB_VERSION = 27;
+    private final static int LIB_VERSION = 24;
     private final static String LIB_NAME = "tmessages." + LIB_VERSION;
     private final static String LIB_SO_NAME = "lib" + LIB_NAME + ".so";
     private final static String LOCALE_LIB_SO_NAME = "lib" + LIB_NAME + "loc.so";
@@ -55,7 +55,7 @@ public class NativeLoader {
                 file.delete();
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
 
         ZipFile zipFile = null;
@@ -86,24 +86,24 @@ public class NativeLoader {
                 init(Constants.FILES_PATH, BuildVars.DEBUG_VERSION);
                 nativeLoaded = true;
             } catch (Error e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
             return true;
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         } finally {
             if (stream != null) {
                 try {
                     stream.close();
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
             if (zipFile != null) {
                 try {
                     zipFile.close();
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
         }
@@ -130,10 +130,10 @@ public class NativeLoader {
                     folder = "mips";
                 } else {
                     folder = "armeabi";
-                    FileLog.e("Unsupported arch: " + Build.CPU_ABI);
+                    FileLog.e("tmessages", "Unsupported arch: " + Build.CPU_ABI);
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
                 folder = "armeabi";
             }
 
@@ -147,14 +147,14 @@ public class NativeLoader {
             if (destFile != null) {
                 destFile = new File(destFile, LIB_SO_NAME);
                 if (destFile.exists()) {
-                    FileLog.d("load normal lib");
+                    FileLog.d("tmessages", "load normal lib");
                     try {
                         System.loadLibrary(LIB_NAME);
                         init(Constants.FILES_PATH, BuildVars.DEBUG_VERSION);
                         nativeLoaded = true;
                         return;
                     } catch (Error e) {
-                        FileLog.e(e);
+                        FileLog.e("tmessages", e);
                     }
                 }
             }
@@ -165,18 +165,18 @@ public class NativeLoader {
             File destLocalFile = new File(destDir, LOCALE_LIB_SO_NAME);
             if (destLocalFile.exists()) {
                 try {
-                    FileLog.d("Load local lib");
+                    FileLog.d("tmessages", "Load local lib");
                     System.load(destLocalFile.getAbsolutePath());
                     init(Constants.FILES_PATH, BuildVars.DEBUG_VERSION);
                     nativeLoaded = true;
                     return;
                 } catch (Error e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
                 destLocalFile.delete();
             }
 
-            FileLog.e("Library not found, arch = " + folder);
+            FileLog.e("tmessages", "Library not found, arch = " + folder);
 
             if (loadFromZip(context, destDir, destLocalFile, folder)) {
                 return;
@@ -190,7 +190,7 @@ public class NativeLoader {
             init(Constants.FILES_PATH, BuildVars.DEBUG_VERSION);
             nativeLoaded = true;
         } catch (Error e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
     }
 

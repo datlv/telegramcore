@@ -3,13 +3,14 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Adapters;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
@@ -17,14 +18,11 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Build;
 import android.text.TextUtils;
-import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
-import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
@@ -38,20 +36,17 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.ui.ActionBar.AlertDialog;
-import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.Cells.BotSwitchCell;
 import org.telegram.ui.Cells.ContextLinkCell;
 import org.telegram.ui.Cells.MentionCell;
-import org.telegram.ui.ChatActivity;
-import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 
-public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
+public class MentionsAdapter extends BaseSearchAdapterRecycler {
 
     public interface MentionsAdapterDelegate {
         void needChangePanelVisibility(boolean show);
@@ -59,10 +54,16 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         void onContextClick(TLRPC.BotInlineResult result);
     }
 
+    public class Holder extends RecyclerView.ViewHolder {
+
+        public Holder(View itemView) {
+            super(itemView);
+        }
+    }
+
     private Context mContext;
     private long dialog_id;
     private TLRPC.ChatFull info;
-    private SearchAdapterHelper searchAdapterHelper;
     private ArrayList<TLRPC.User> searchResultUsernames;
     private ArrayList<String> searchResultHashtags;
     private ArrayList<String> searchResultCommands;
@@ -83,7 +84,6 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
     private boolean needBotContext = true;
     private boolean isDarkTheme;
     private int botsCount;
-    private boolean inlineMediaEnabled = true;
 
     private String searchingContextUsername;
     private String searchingContextQuery;
@@ -96,14 +96,14 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
     private Runnable contextQueryRunnable;
     private Location lastKnownLocation;
 
-    private ChatActivity parentFragment;
+    private BaseFragment parentFragment;
 
     private SendMessagesHelper.LocationProvider locationProvider = new SendMessagesHelper.LocationProvider(new SendMessagesHelper.LocationProvider.LocationProviderDelegate() {
         @Override
         public void onLocationAcquired(Location location) {
             if (foundContextBot != null && foundContextBot.bot_inline_geo) {
                 lastKnownLocation = location;
-                searchForContextBotResults(true, foundContextBot, searchingContextQuery, "");
+                searchForContextBotResults(foundContextBot, searchingContextQuery, "");
             }
         }
 
@@ -124,20 +124,6 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         delegate = mentionsAdapterDelegate;
         isDarkTheme = darkTheme;
         dialog_id = did;
-        searchAdapterHelper = new SearchAdapterHelper();
-        searchAdapterHelper.setDelegate(new SearchAdapterHelper.SearchAdapterHelperDelegate() {
-            @Override
-            public void onDataSetChanged() {
-                notifyDataSetChanged();
-            }
-
-            @Override
-            public void onSetHashtags(ArrayList<SearchAdapterHelper.HashtagObject> arrayList, HashMap<String, SearchAdapterHelper.HashtagObject> hashMap) {
-                if (lastText != null) {
-                    searchUsernameOrHashtag(lastText, lastPosition, messages);
-                }
-            }
-        });
     }
 
     public void onDestroy() {
@@ -157,7 +143,6 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
             contextQueryReqid = 0;
         }
         foundContextBot = null;
-        inlineMediaEnabled = true;
         searchingContextUsername = null;
         searchingContextQuery = null;
         noUserName = false;
@@ -167,7 +152,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         allowNewMentions = value;
     }
 
-    public void setParentFragment(ChatActivity fragment) {
+    public void setParentFragment(BaseFragment fragment) {
         parentFragment = fragment;
     }
 
@@ -194,12 +179,21 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         botsCount = count;
     }
 
+    @Override
     public void clearRecentHashtags() {
-        searchAdapterHelper.clearRecentHashtags();
+        super.clearRecentHashtags();
         searchResultHashtags.clear();
         notifyDataSetChanged();
         if (delegate != null) {
             delegate.needChangePanelVisibility(false);
+        }
+    }
+
+    @Override
+    protected void setHashtags(ArrayList<HashtagObject> arrayList, HashMap<String, HashtagObject> hashMap) {
+        super.setHashtags(arrayList, hashMap);
+        if (lastText != null) {
+            searchUsernameOrHashtag(lastText, lastPosition, messages);
         }
     }
 
@@ -219,75 +213,6 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         return foundContextBot != null ? foundContextBot.username : "";
     }
 
-    private void processFoundUser(TLRPC.User user) {
-        contextUsernameReqid = 0;
-        locationProvider.stop();
-        if (user != null && user.bot && user.bot_inline_placeholder != null) {
-            foundContextBot = user;
-            if (parentFragment != null) {
-                TLRPC.Chat chat = parentFragment.getCurrentChat();
-                if (chat != null) {
-                    inlineMediaEnabled = ChatObject.canSendStickers(chat);
-                    if (!inlineMediaEnabled) {
-                        notifyDataSetChanged();
-                        delegate.needChangePanelVisibility(true);
-                        return;
-                    }
-                }
-            }
-            if (foundContextBot.bot_inline_geo) {
-                SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("Notifications", Activity.MODE_PRIVATE);
-                boolean allowGeo = preferences.getBoolean("inlinegeo_" + foundContextBot.id, false);
-                if (!allowGeo && parentFragment != null && parentFragment.getParentActivity() != null) {
-                    final TLRPC.User foundContextBotFinal = foundContextBot;
-                    AlertDialog.Builder builder = new AlertDialog.Builder(parentFragment.getParentActivity());
-                    builder.setTitle(LocaleController.getString("ShareYouLocationTitle", R.string.ShareYouLocationTitle));
-                    builder.setMessage(LocaleController.getString("ShareYouLocationInline", R.string.ShareYouLocationInline));
-                    final boolean buttonClicked[] = new boolean[1];
-                    builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            buttonClicked[0] = true;
-                            if (foundContextBotFinal != null) {
-                                SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("Notifications", Activity.MODE_PRIVATE);
-                                preferences.edit().putBoolean("inlinegeo_" + foundContextBotFinal.id, true).commit();
-                                checkLocationPermissionsOrStart();
-                            }
-                        }
-                    });
-                    builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            buttonClicked[0] = true;
-                            onLocationUnavailable();
-                        }
-                    });
-                    parentFragment.showDialog(builder.create(), new DialogInterface.OnDismissListener() {
-                        @Override
-                        public void onDismiss(DialogInterface dialog) {
-                            if (!buttonClicked[0]) {
-                                onLocationUnavailable();
-                            }
-                        }
-                    });
-                } else {
-                    checkLocationPermissionsOrStart();
-                }
-            }
-        } else {
-            foundContextBot = null;
-            inlineMediaEnabled = true;
-        }
-        if (foundContextBot == null) {
-            noUserName = true;
-        } else {
-            if (delegate != null) {
-                delegate.onContextSearch(true);
-            }
-            searchForContextBotResults(true, foundContextBot, searchingContextQuery, "");
-        }
-    }
-
     private void searchForContextBot(final String username, final String query) {
         if (foundContextBot != null && foundContextBot.username != null && foundContextBot.username.equals(username) && searchingContextQuery != null && searchingContextQuery.equals(query)) {
             return;
@@ -297,9 +222,6 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         searchResultBotContextSwitch = null;
         notifyDataSetChanged();
         if (foundContextBot != null) {
-            if (!inlineMediaEnabled && username != null && query != null) {
-                return;
-            }
             delegate.needChangePanelVisibility(false);
         }
         if (contextQueryRunnable != null) {
@@ -316,7 +238,6 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
                 contextQueryReqid = 0;
             }
             foundContextBot = null;
-            inlineMediaEnabled = true;
             searchingContextUsername = null;
             searchingContextQuery = null;
             locationProvider.stop();
@@ -359,40 +280,75 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
                     if (noUserName) {
                         return;
                     }
-                    searchForContextBotResults(true, foundContextBot, query, "");
+                    searchForContextBotResults(foundContextBot, query, "");
                 } else {
-                    searchingContextUsername = username;
-                    TLObject object = MessagesController.getInstance().getUserOrChat(searchingContextUsername);
-                    if (object instanceof TLRPC.User) {
-                        processFoundUser((TLRPC.User) object);
-                    } else {
-                        TLRPC.TL_contacts_resolveUsername req = new TLRPC.TL_contacts_resolveUsername();
-                        req.username = searchingContextUsername;
-                        contextUsernameReqid = ConnectionsManager.getInstance().sendRequest(req, new RequestDelegate() {
-                            @Override
-                            public void run(final TLObject response, final TLRPC.TL_error error) {
-                                AndroidUtilities.runOnUIThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        if (searchingContextUsername == null || !searchingContextUsername.equals(username)) {
-                                            return;
-                                        }
-                                        TLRPC.User user = null;
-                                        if (error == null) {
-                                            TLRPC.TL_contacts_resolvedPeer res = (TLRPC.TL_contacts_resolvedPeer) response;
-                                            if (!res.users.isEmpty()) {
-                                                user = res.users.get(0);
+                    TLRPC.TL_contacts_resolveUsername req = new TLRPC.TL_contacts_resolveUsername();
+                    req.username = searchingContextUsername = username;
+                    contextUsernameReqid = ConnectionsManager.getInstance().sendRequest(req, new RequestDelegate() {
+                        @Override
+                        public void run(final TLObject response, final TLRPC.TL_error error) {
+                            AndroidUtilities.runOnUIThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (searchingContextUsername == null || !searchingContextUsername.equals(username)) {
+                                        return;
+                                    }
+                                    contextUsernameReqid = 0;
+                                    foundContextBot = null;
+                                    locationProvider.stop();
+                                    if (error == null) {
+                                        TLRPC.TL_contacts_resolvedPeer res = (TLRPC.TL_contacts_resolvedPeer) response;
+                                        if (!res.users.isEmpty()) {
+                                            TLRPC.User user = res.users.get(0);
+                                            if (user.bot && user.bot_inline_placeholder != null) {
                                                 MessagesController.getInstance().putUser(user, false);
                                                 MessagesStorage.getInstance().putUsersAndChats(res.users, null, true, true);
-
+                                                foundContextBot = user;
+                                                if (foundContextBot.bot_inline_geo) {
+                                                    SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("Notifications", Activity.MODE_PRIVATE);
+                                                    boolean allowGeo = preferences.getBoolean("inlinegeo_" + foundContextBot.id, false);
+                                                    if (!allowGeo && parentFragment != null && parentFragment.getParentActivity() != null) {
+                                                        final TLRPC.User foundContextBotFinal = foundContextBot;
+                                                        AlertDialog.Builder builder = new AlertDialog.Builder(parentFragment.getParentActivity());
+                                                        builder.setTitle(LocaleController.getString("ShareYouLocationTitle", R.string.ShareYouLocationTitle));
+                                                        builder.setMessage(LocaleController.getString("ShareYouLocationInline", R.string.ShareYouLocationInline));
+                                                        builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), new DialogInterface.OnClickListener() {
+                                                            @Override
+                                                            public void onClick(DialogInterface dialogInterface, int i) {
+                                                                if (foundContextBotFinal != null) {
+                                                                    SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("Notifications", Activity.MODE_PRIVATE);
+                                                                    preferences.edit().putBoolean("inlinegeo_" + foundContextBotFinal.id, true).commit();
+                                                                    checkLocationPermissionsOrStart();
+                                                                }
+                                                            }
+                                                        });
+                                                        builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), new DialogInterface.OnClickListener() {
+                                                            @Override
+                                                            public void onClick(DialogInterface dialog, int which) {
+                                                                onLocationUnavailable();
+                                                            }
+                                                        });
+                                                        parentFragment.showDialog(builder.create());
+                                                    } else {
+                                                        checkLocationPermissionsOrStart();
+                                                    }
+                                                }
                                             }
                                         }
-                                        processFoundUser(user);
                                     }
-                                });
-                            }
-                        });
-                    }
+                                    if (foundContextBot == null) {
+                                        noUserName = true;
+                                    } else {
+                                        if (delegate != null) {
+                                            delegate.onContextSearch(true);
+                                        }
+                                        searchForContextBotResults(foundContextBot, searchingContextQuery, "");
+                                    }
+                                }
+                            });
+
+                        }
+                    });
                 }
             }
         };
@@ -404,7 +360,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
             lastKnownLocation = new Location("network");
             lastKnownLocation.setLatitude(-1000);
             lastKnownLocation.setLongitude(-1000);
-            searchForContextBotResults(true, foundContextBot, searchingContextQuery, "");
+            searchForContextBotResults(foundContextBot, searchingContextQuery, "");
         }
     }
 
@@ -434,19 +390,13 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         if (contextQueryReqid != 0 || nextQueryOffset == null || nextQueryOffset.length() == 0 || foundContextBot == null || searchingContextQuery == null) {
             return;
         }
-        searchForContextBotResults(true, foundContextBot, searchingContextQuery, nextQueryOffset);
+        searchForContextBotResults(foundContextBot, searchingContextQuery, nextQueryOffset);
     }
 
-    private void searchForContextBotResults(final boolean cache, final TLRPC.User user, final String query, final String offset) {
+    private void searchForContextBotResults(TLRPC.User user, final String query, final String offset) {
         if (contextQueryReqid != 0) {
             ConnectionsManager.getInstance().cancelRequest(contextQueryReqid, true);
             contextQueryReqid = 0;
-        }
-        if (!inlineMediaEnabled) {
-            if (delegate != null) {
-                delegate.onContextSearch(false);
-            }
-            return;
         }
         if (query == null || user == null) {
             searchingContextQuery = null;
@@ -455,8 +405,24 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         if (user.bot_inline_geo && lastKnownLocation == null) {
             return;
         }
-        final String key = dialog_id + "_" + query + "_" + offset + "_" + dialog_id + "_" + user.id + "_" + (user.bot_inline_geo && lastKnownLocation != null && lastKnownLocation.getLatitude() != -1000 ? lastKnownLocation.getLatitude() + lastKnownLocation.getLongitude() : "");
-        RequestDelegate requestDelegate = new RequestDelegate() {
+        TLRPC.TL_messages_getInlineBotResults req = new TLRPC.TL_messages_getInlineBotResults();
+        req.bot = MessagesController.getInputUser(user);
+        req.query = query;
+        req.offset = offset;
+        if (user.bot_inline_geo && lastKnownLocation != null && lastKnownLocation.getLatitude() != -1000) {
+            req.flags |= 1;
+            req.geo_point = new TLRPC.TL_inputGeoPoint();
+            req.geo_point.lat = lastKnownLocation.getLatitude();
+            req.geo_point._long = lastKnownLocation.getLongitude();
+        }
+        int lower_id = (int) dialog_id;
+        int high_id = (int) (dialog_id >> 32);
+        if (lower_id != 0) {
+            req.peer = MessagesController.getInputPeer(lower_id);
+        } else {
+            req.peer = new TLRPC.TL_inputPeerEmpty();
+        }
+        contextQueryReqid = ConnectionsManager.getInstance().sendRequest(req, new RequestDelegate() {
             @Override
             public void run(final TLObject response, final TLRPC.TL_error error) {
                 AndroidUtilities.runOnUIThread(new Runnable() {
@@ -469,14 +435,8 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
                             delegate.onContextSearch(false);
                         }
                         contextQueryReqid = 0;
-                        if (cache && response == null) {
-                            searchForContextBotResults(false, user, query, offset);
-                        }
-                        if (response != null) {
+                        if (error == null) {
                             TLRPC.TL_messages_botResults res = (TLRPC.TL_messages_botResults) response;
-                            if (!cache && res.cache_time != 0) {
-                                MessagesStorage.getInstance().saveBotCache(key, res);
-                            }
                             nextQueryOffset = res.next_offset;
                             if (searchResultBotContextById == null) {
                                 searchResultBotContextById = new HashMap<>();
@@ -519,34 +479,11 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
                     }
                 });
             }
-        };
-
-        if (cache) {
-            MessagesStorage.getInstance().getBotCache(key, requestDelegate);
-        } else {
-            TLRPC.TL_messages_getInlineBotResults req = new TLRPC.TL_messages_getInlineBotResults();
-            req.bot = MessagesController.getInputUser(user);
-            req.query = query;
-            req.offset = offset;
-            if (user.bot_inline_geo && lastKnownLocation != null && lastKnownLocation.getLatitude() != -1000) {
-                req.flags |= 1;
-                req.geo_point = new TLRPC.TL_inputGeoPoint();
-                req.geo_point.lat = lastKnownLocation.getLatitude();
-                req.geo_point._long = lastKnownLocation.getLongitude();
-            }
-            int lower_id = (int) dialog_id;
-            int high_id = (int) (dialog_id >> 32);
-            if (lower_id != 0) {
-                req.peer = MessagesController.getInputPeer(lower_id);
-            } else {
-                req.peer = new TLRPC.TL_inputPeerEmpty();
-            }
-            contextQueryReqid = ConnectionsManager.getInstance().sendRequest(req, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors);
-        }
+        }, ConnectionsManager.RequestFlagFailOnServerErrors);
     }
 
     public void searchUsernameOrHashtag(String text, int position, ArrayList<MessageObject> messageObjects) {
-        if (TextUtils.isEmpty(text)) {
+        if (text == null || text.length() == 0) {
             searchForContextBot(null, null);
             delegate.needChangePanelVisibility(false);
             lastText = null;
@@ -619,19 +556,19 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
                         break;
                     }
                 } else if (ch == '#') {
-                    if (searchAdapterHelper.loadRecentHashtags()) {
-                        foundType = 1;
-                        resultStartPosition = a;
-                        resultLength = result.length() + 1;
-                        result.insert(0, ch);
-                        break;
-                    } else {
+                    if (!hashtagsLoadedFromDb) {
+                        loadRecentHashtags();
                         lastText = text;
                         lastPosition = position;
                         messages = messageObjects;
                         delegate.needChangePanelVisibility(false);
                         return;
                     }
+                    foundType = 1;
+                    resultStartPosition = a;
+                    resultLength = result.length() + 1;
+                    result.insert(0, ch);
+                    break;
                 } else if (a == 0 && botInfo != null && ch == '/') {
                     foundType = 2;
                     resultStartPosition = a;
@@ -676,15 +613,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
                     }
                 }
             }
-            TLRPC.Chat chat;
-            if (parentFragment != null) {
-                chat = parentFragment.getCurrentChat();
-            } else if (info != null) {
-                chat = MessagesController.getInstance().getChat(info.id);
-            } else {
-                chat = null;
-            }
-            if (chat != null && info != null && info.participants != null && (!ChatObject.isChannel(chat) || chat.megagroup)) {
+            if (info != null && info.participants != null) {
                 for (int a = 0; a < info.participants.participants.size(); a++) {
                     TLRPC.ChatParticipant chatParticipant = info.participants.participants.get(a);
                     TLRPC.User user = MessagesController.getInstance().getUser(chatParticipant.user_id);
@@ -743,9 +672,8 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         } else if (foundType == 1) {
             ArrayList<String> newResult = new ArrayList<>();
             String hashtagString = result.toString().toLowerCase();
-            ArrayList<SearchAdapterHelper.HashtagObject> hashtags = searchAdapterHelper.getHashtags();
             for (int a = 0; a < hashtags.size(); a++) {
-                SearchAdapterHelper.HashtagObject hashtagObject = hashtags.get(a);
+                HashtagObject hashtagObject = hashtags.get(a);
                 if (hashtagObject != null && hashtagObject.hashtag != null && hashtagObject.hashtag.startsWith(hashtagString)) {
                     newResult.add(hashtagObject.hashtag);
                 }
@@ -797,9 +725,6 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
 
     @Override
     public int getItemCount() {
-        if (foundContextBot != null && !inlineMediaEnabled) {
-            return 1;
-        }
         if (searchResultBotContext != null) {
             return searchResultBotContext.size() + (searchResultBotContextSwitch != null ? 1 : 0);
         } else if (searchResultUsernames != null) {
@@ -814,9 +739,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
 
     @Override
     public int getItemViewType(int position) {
-        if (foundContextBot != null && !inlineMediaEnabled) {
-            return 3;
-        } else if (searchResultBotContext != null) {
+        if (searchResultBotContext != null) {
             if (position == 0 && searchResultBotContextSwitch != null) {
                 return 2;
             }
@@ -824,10 +747,6 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         } else {
             return 0;
         }
-    }
-
-    public void addHashtagsFromMessage(CharSequence message) {
-        searchAdapterHelper.addHashtagsFromMessage(message);
     }
 
     public int getItemPosition(int i) {
@@ -888,64 +807,33 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter {
         return searchResultBotContext != null;
     }
 
-    public boolean isBannedInline() {
-        return foundContextBot != null && !inlineMediaEnabled;
-    }
-
     public boolean isMediaLayout() {
         return contextMedia;
     }
 
     @Override
-    public boolean isEnabled(RecyclerView.ViewHolder holder) {
-        return foundContextBot == null || inlineMediaEnabled;
-    }
-
-    @Override
     public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
         View view;
-        switch (viewType) {
-            case 0:
-                view = new MentionCell(mContext);
-                ((MentionCell) view).setIsDarkTheme(isDarkTheme);
-                break;
-            case 1:
-                view = new ContextLinkCell(mContext);
-                ((ContextLinkCell) view).setDelegate(new ContextLinkCell.ContextLinkCellDelegate() {
-                    @Override
-                    public void didPressedImage(ContextLinkCell cell) {
-                        delegate.onContextClick(cell.getResult());
-                    }
-                });
-                break;
-            case 2:
-                view = new BotSwitchCell(mContext);
-                break;
-            case 3:
-            default:
-                TextView textView = new TextView(mContext);
-                textView.setPadding(AndroidUtilities.dp(8), AndroidUtilities.dp(8), AndroidUtilities.dp(8), AndroidUtilities.dp(8));
-                textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-                textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
-                view = textView;
-                break;
+        if (viewType == 1) {
+            view = new ContextLinkCell(mContext);
+            ((ContextLinkCell) view).setDelegate(new ContextLinkCell.ContextLinkCellDelegate() {
+                @Override
+                public void didPressedImage(ContextLinkCell cell) {
+                    delegate.onContextClick(cell.getResult());
+                }
+            });
+        } else if (viewType == 2) {
+            view = new BotSwitchCell(mContext);
+        } else {
+            view = new MentionCell(mContext);
+            ((MentionCell) view).setIsDarkTheme(isDarkTheme);
         }
-        return new RecyclerListView.Holder(view);
+        return new Holder(view);
     }
 
     @Override
     public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
-        if (holder.getItemViewType() == 3) {
-            TextView textView = (TextView) holder.itemView;
-            TLRPC.Chat chat = parentFragment.getCurrentChat();
-            if (chat != null) {
-                if (AndroidUtilities.isBannedForever(chat.banned_rights.until_date)) {
-                    textView.setText(LocaleController.getString("AttachInlineRestrictedForever", R.string.AttachInlineRestrictedForever));
-                } else {
-                    textView.setText(LocaleController.formatString("AttachInlineRestricted", R.string.AttachInlineRestricted, LocaleController.formatDateForBan(chat.banned_rights.until_date)));
-                }
-            }
-        } else if (searchResultBotContext != null) {
+        if (searchResultBotContext != null) {
             boolean hasTop = searchResultBotContextSwitch != null;
             if (holder.getItemViewType() == 2) {
                 if (hasTop) {

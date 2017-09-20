@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -36,26 +36,20 @@ public class RadialProgress {
     private Drawable previousDrawable;
     private boolean hideCurrentDrawable;
     private int progressColor = 0xffffffff;
-    private Paint progressPaint;
-
-    private int diff = AndroidUtilities.dp(4);
 
     private static DecelerateInterpolator decelerateInterpolator;
+    private static Paint progressPaint;
     private boolean alphaForPrevious = true;
 
     public RadialProgress(View parentView) {
         if (decelerateInterpolator == null) {
             decelerateInterpolator = new DecelerateInterpolator();
+            progressPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            progressPaint.setStyle(Paint.Style.STROKE);
+            progressPaint.setStrokeCap(Paint.Cap.ROUND);
+            progressPaint.setStrokeWidth(AndroidUtilities.dp(3));
         }
-        progressPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        progressPaint.setStyle(Paint.Style.STROKE);
-        progressPaint.setStrokeCap(Paint.Cap.ROUND);
-        progressPaint.setStrokeWidth(AndroidUtilities.dp(3));
         parent = parentView;
-    }
-
-    public void setStrikeWidth(int width) {
-        progressPaint.setStrokeWidth(width);
     }
 
     public void setProgressRect(int left, int top, int right, int bottom) {
@@ -107,10 +101,6 @@ public class RadialProgress {
         }
     }
 
-    public void setDiff(int value) {
-        diff = value;
-    }
-
     public void setProgressColor(int color) {
         progressColor = color;
     }
@@ -141,7 +131,7 @@ public class RadialProgress {
 
     private void invalidateParent() {
         int offset = AndroidUtilities.dp(2);
-        parent.invalidate((int) progressRect.left - offset, (int) progressRect.top - offset, (int) progressRect.right + offset * 2, (int) progressRect.bottom + offset * 2);
+        parent.invalidate((int)progressRect.left - offset, (int)progressRect.top - offset, (int)progressRect.right + offset * 2, (int)progressRect.bottom + offset * 2);
     }
 
     public void setBackground(Drawable drawable, boolean withRound, boolean animated) {
@@ -183,24 +173,25 @@ public class RadialProgress {
             } else {
                 previousDrawable.setAlpha(255);
             }
-            previousDrawable.setBounds((int) progressRect.left, (int) progressRect.top, (int) progressRect.right, (int) progressRect.bottom);
+            previousDrawable.setBounds((int)progressRect.left, (int)progressRect.top, (int)progressRect.right, (int)progressRect.bottom);
             previousDrawable.draw(canvas);
         }
 
         if (!hideCurrentDrawable && currentDrawable != null) {
             if (previousDrawable != null) {
-                currentDrawable.setAlpha((int) (255 * (1.0f - animatedAlphaValue)));
+                currentDrawable.setAlpha((int)(255 * (1.0f - animatedAlphaValue)));
             } else {
                 currentDrawable.setAlpha(255);
             }
-            currentDrawable.setBounds((int) progressRect.left, (int) progressRect.top, (int) progressRect.right, (int) progressRect.bottom);
+            currentDrawable.setBounds((int)progressRect.left, (int)progressRect.top, (int)progressRect.right, (int)progressRect.bottom);
             currentDrawable.draw(canvas);
         }
 
         if (currentWithRound || previousWithRound) {
+            int diff = AndroidUtilities.dp(4);
             progressPaint.setColor(progressColor);
             if (previousWithRound) {
-                progressPaint.setAlpha((int) (255 * animatedAlphaValue));
+                progressPaint.setAlpha((int)(255 * animatedAlphaValue));
             } else {
                 progressPaint.setAlpha(255);
             }

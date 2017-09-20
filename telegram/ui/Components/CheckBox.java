@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -14,7 +14,6 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
-import android.graphics.PorterDuffColorFilter;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.drawable.Drawable;
 import android.view.View;
@@ -36,7 +35,6 @@ public class CheckBox extends View {
     private Canvas checkCanvas;
 
     private boolean drawBackground;
-    private boolean hasBorder;
 
     private float progress;
     private ObjectAnimator checkAnimator;
@@ -47,7 +45,7 @@ public class CheckBox extends View {
 
     private int size = 22;
     private int checkOffset;
-    private int color; //default 0xff5ec245
+    private int color = 0xff5ec245;
 
     private final static float progressBounceDiff = 0.2f;
 
@@ -69,7 +67,7 @@ public class CheckBox extends View {
             backgroundPaint.setStrokeWidth(AndroidUtilities.dp(2));
         }
 
-        checkDrawable = context.getResources().getDrawable(resId).mutate();
+        checkDrawable = context.getResources().getDrawable(resId);
     }
 
     @Override
@@ -95,10 +93,6 @@ public class CheckBox extends View {
         drawBackground = value;
     }
 
-    public void setHasBorder(boolean value) {
-        hasBorder = value;
-    }
-
     public void setCheckOffset(int value) {
         checkOffset = value;
     }
@@ -111,20 +105,8 @@ public class CheckBox extends View {
         return progress;
     }
 
-    public void setColor(int backgroundColor, int checkColor) {
-        color = backgroundColor;
-        checkDrawable.setColorFilter(new PorterDuffColorFilter(checkColor, PorterDuff.Mode.MULTIPLY));
-        invalidate();
-    }
-
-    public void setBackgroundColor(int backgroundColor) {
-        color = backgroundColor;
-        invalidate();
-    }
-
-    public void setCheckColor(int checkColor) {
-        checkDrawable.setColorFilter(new PorterDuffColorFilter(checkColor, PorterDuff.Mode.MULTIPLY));
-        invalidate();
+    public void setColor(int value) {
+        color = value;
     }
 
     private void cancelCheckAnimator() {
@@ -203,9 +185,6 @@ public class CheckBox extends View {
 
             paint.setColor(color);
 
-            if (hasBorder) {
-                rad -= AndroidUtilities.dp(2);
-            }
             bitmapCanvas.drawCircle(getMeasuredWidth() / 2, getMeasuredHeight() / 2, rad, paint);
             bitmapCanvas.drawCircle(getMeasuredWidth() / 2, getMeasuredHeight() / 2, rad * (1 - roundProgress), eraser);
             canvas.drawBitmap(drawBitmap, 0, 0, null);

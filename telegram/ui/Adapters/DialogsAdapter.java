@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Adapters;
@@ -18,16 +18,22 @@ import org.telegram.messenger.support.widget.RecyclerView;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Cells.DialogCell;
 import org.telegram.ui.Cells.LoadingCell;
-import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.ArrayList;
 
-public class DialogsAdapter extends RecyclerListView.SelectionAdapter {
+public class DialogsAdapter extends RecyclerView.Adapter {
 
     private Context mContext;
     private int dialogsType;
     private long openedDialogId;
     private int currentCount;
+
+    private class Holder extends RecyclerView.ViewHolder {
+
+        public Holder(View itemView) {
+            super(itemView);
+        }
+    }
 
     public DialogsAdapter(Context context, int type) {
         mContext = context;
@@ -83,8 +89,8 @@ public class DialogsAdapter extends RecyclerListView.SelectionAdapter {
     }
 
     @Override
-    public boolean isEnabled(RecyclerView.ViewHolder holder) {
-        return holder.getItemViewType() != 1;
+    public long getItemId(int i) {
+        return i;
     }
 
     @Override
@@ -96,7 +102,7 @@ public class DialogsAdapter extends RecyclerListView.SelectionAdapter {
             view = new LoadingCell(mContext);
         }
         view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT));
-        return new RecyclerListView.Holder(view);
+        return new Holder(view);
     }
 
     @Override

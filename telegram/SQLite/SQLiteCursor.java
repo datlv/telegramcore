@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.SQLite;
@@ -76,14 +76,14 @@ public class SQLiteCursor {
             int repeatCount = 6;
             while (repeatCount-- != 0) {
                 try {
-                    FileLog.e("sqlite busy, waiting...");
+                    FileLog.e("tmessages", "sqlite busy, waiting...");
                     Thread.sleep(500);
                     res = preparedStatement.step();
                     if (res == 0) {
                         break;
                     }
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
             if (res == -1) {

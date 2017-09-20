@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
@@ -134,11 +134,11 @@ public class FileLoader {
         });
     }
 
-    public void uploadFile(final String location, final boolean encrypted, final boolean small, final int type) {
-        uploadFile(location, encrypted, small, 0, type);
+    public void uploadFile(final String location, final boolean encrypted, final boolean small) {
+        uploadFile(location, encrypted, small, 0);
     }
 
-    public void uploadFile(final String location, final boolean encrypted, final boolean small, final int estimatedSize, final int type) {
+    public void uploadFile(final String location, final boolean encrypted, final boolean small, final int estimatedSize) {
         if (location == null) {
             return;
         }
@@ -162,13 +162,13 @@ public class FileLoader {
                         uploadSizes.remove(location);
                     }
                 }
-                FileUploadOperation operation = new FileUploadOperation(location, encrypted, esimated, type);
+                FileUploadOperation operation = new FileUploadOperation(location, encrypted, esimated);
                 if (encrypted) {
                     uploadOperationPathsEnc.put(location, operation);
                 } else {
                     uploadOperationPaths.put(location, operation);
                 }
-                operation.setDelegate(new FileUploadOperation.FileUploadOperationDelegate() {
+                operation.delegate = new FileUploadOperation.FileUploadOperationDelegate() {
                     @Override
                     public void didFinishUploadingFile(final FileUploadOperation operation, final TLRPC.InputFile inputFile, final TLRPC.InputEncryptedFile inputEncryptedFile, final byte[] key, final byte[] iv) {
                         fileLoaderQueue.postRunnable(new Runnable() {
@@ -247,7 +247,7 @@ public class FileLoader {
                             delegate.fileUploadProgressChanged(location, progress, encrypted);
                         }
                     }
-                });
+                };
                 if (small) {
                     if (currentUploadSmallOperationsCount < 1) {
                         currentUploadSmallOperationsCount++;
@@ -268,22 +268,18 @@ public class FileLoader {
     }
 
     public void cancelLoadFile(TLRPC.Document document) {
-        cancelLoadFile(document, null, null, null);
-    }
-
-    public void cancelLoadFile(TLRPC.TL_webDocument document) {
-        cancelLoadFile(null, document, null, null);
+        cancelLoadFile(document, null, null);
     }
 
     public void cancelLoadFile(TLRPC.PhotoSize photo) {
-        cancelLoadFile(null, null, photo.location, null);
+        cancelLoadFile(null, photo.location, null);
     }
 
     public void cancelLoadFile(TLRPC.FileLocation location, String ext) {
-        cancelLoadFile(null, null, location, ext);
+        cancelLoadFile(null, location, ext);
     }
 
-    private void cancelLoadFile(final TLRPC.Document document, final TLRPC.TL_webDocument webDocument, final TLRPC.FileLocation location, final String locationExt) {
+    private void cancelLoadFile(final TLRPC.Document document, final TLRPC.FileLocation location, final String locationExt) {
         if (location == null && document == null) {
             return;
         }
@@ -295,20 +291,18 @@ public class FileLoader {
                     fileName = getAttachFileName(location, locationExt);
                 } else if (document != null) {
                     fileName = getAttachFileName(document);
-                } else if (webDocument != null) {
-                    fileName = getAttachFileName(webDocument);
                 }
                 if (fileName == null) {
                     return;
                 }
                 FileLoadOperation operation = loadOperationPaths.remove(fileName);
                 if (operation != null) {
-                    if (MessageObject.isVoiceDocument(document) || MessageObject.isVoiceWebDocument(webDocument)) {
+                    if (MessageObject.isVoiceDocument(document)) {
                         if (!audioLoadOperationQueue.remove(operation)) {
                             currentAudioLoadOperationsCount--;
                         }
                     } else if (location != null) {
-                        if (!photoLoadOperationQueue.remove(operation) || MessageObject.isImageWebDocument(webDocument)) {
+                        if (!photoLoadOperationQueue.remove(operation)) {
                             currentPhotoLoadOperationsCount--;
                         }
                     } else {
@@ -335,37 +329,24 @@ public class FileLoader {
         try {
             semaphore.acquire();
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
         return result[0];
     }
 
-    public void loadFile(TLRPC.PhotoSize photo, String ext, int cacheType) {
-        if (cacheType == 0 && (photo != null && photo.size == 0 || photo.location.key != null)) {
-            cacheType = 1;
-        }
-        loadFile(null, null, photo.location, ext, photo.size, false, cacheType);
+    public void loadFile(TLRPC.PhotoSize photo, String ext, boolean cacheOnly) {
+        loadFile(null, photo.location, ext, photo.size, false, cacheOnly || (photo != null && photo.size == 0 || photo.location.key != null));
     }
 
-    public void loadFile(TLRPC.Document document, boolean force, int cacheType) {
-        if (cacheType == 0 && (document != null && document.key != null)) {
-            cacheType = 1;
-        }
-        loadFile(document, null, null, null, 0, force, cacheType);
+    public void loadFile(TLRPC.Document document, boolean force, boolean cacheOnly) {
+        loadFile(document, null, null, 0, force, cacheOnly || document != null && document.key != null);
     }
 
-    public void loadFile(TLRPC.TL_webDocument document, boolean force, int cacheType) {
-        loadFile(null, document, null, null, 0, force, cacheType);
+    public void loadFile(TLRPC.FileLocation location, String ext, int size, boolean cacheOnly) {
+        loadFile(null, location, ext, size, true, cacheOnly || size == 0 || (location != null && location.key != null));
     }
 
-    public void loadFile(TLRPC.FileLocation location, String ext, int size, int cacheType) {
-        if (cacheType == 0 && (size == 0 || location != null && location.key != null)) {
-            cacheType = 1;
-        }
-        loadFile(null, null, location, ext, size, true, cacheType);
-    }
-
-    private void loadFile(final TLRPC.Document document, final TLRPC.TL_webDocument webDocument, final TLRPC.FileLocation location, final String locationExt, final int locationSize, final boolean force, final int cacheType) {
+    private void loadFile(final TLRPC.Document document, final TLRPC.FileLocation location, final String locationExt, final int locationSize, final boolean force, final boolean cacheOnly) {
         fileLoaderQueue.postRunnable(new Runnable() {
             @Override
             public void run() {
@@ -374,8 +355,6 @@ public class FileLoader {
                     fileName = getAttachFileName(location, locationExt);
                 } else if (document != null) {
                     fileName = getAttachFileName(document);
-                } else if (webDocument != null) {
-                    fileName = getAttachFileName(webDocument);
                 }
                 if (fileName == null || fileName.contains("" + Integer.MIN_VALUE)) {
                     return;
@@ -387,9 +366,9 @@ public class FileLoader {
                     if (force) {
                         operation.setForceRequest(true);
                         LinkedList<FileLoadOperation> downloadQueue;
-                        if (MessageObject.isVoiceDocument(document) || MessageObject.isVoiceWebDocument(webDocument)) {
+                        if (MessageObject.isVoiceDocument(document)) {
                             downloadQueue = audioLoadOperationQueue;
-                        } else if (location != null || MessageObject.isImageWebDocument(webDocument)) {
+                        } else if (location != null) {
                             downloadQueue = photoLoadOperationQueue;
                         } else {
                             downloadQueue = loadOperationQueue;
@@ -421,22 +400,9 @@ public class FileLoader {
                     } else {
                         type = MEDIA_DIR_DOCUMENT;
                     }
-                } else if (webDocument != null) {
-                    operation = new FileLoadOperation(webDocument);
-                    if (MessageObject.isVoiceWebDocument(webDocument)) {
-                        type = MEDIA_DIR_AUDIO;
-                    } else if (MessageObject.isVideoWebDocument(webDocument)) {
-                        type = MEDIA_DIR_VIDEO;
-                    } else if (MessageObject.isImageWebDocument(webDocument)) {
-                        type = MEDIA_DIR_IMAGE;
-                    } else {
-                        type = MEDIA_DIR_DOCUMENT;
-                    }
                 }
-                if (cacheType == 0) {
+                if (!cacheOnly) {
                     storeDir = getDirectory(type);
-                } else if (cacheType == 2) {
-                    operation.setEncryptFile(true);
                 }
                 operation.setPaths(storeDir, tempDir);
 
@@ -448,12 +414,12 @@ public class FileLoader {
                         if (delegate != null) {
                             delegate.fileDidLoaded(finalFileName, finalFile, finalType);
                         }
-                        checkDownloadQueue(document, webDocument, location, finalFileName);
+                        checkDownloadQueue(document, location, finalFileName);
                     }
 
                     @Override
                     public void didFailedLoadingFile(FileLoadOperation operation, int reason) {
-                        checkDownloadQueue(document, webDocument, location, finalFileName);
+                        checkDownloadQueue(document, location, finalFileName);
                         if (delegate != null) {
                             delegate.fileDidFailedLoad(finalFileName, reason);
                         }
@@ -540,12 +506,12 @@ public class FileLoader {
         });
     }
 
-    private void checkDownloadQueue(final TLRPC.Document document, final TLRPC.TL_webDocument webDocument, final TLRPC.FileLocation location, final String arg1) {
+    private void checkDownloadQueue(final TLRPC.Document document, final TLRPC.FileLocation location, final String arg1) {
         fileLoaderQueue.postRunnable(new Runnable() {
             @Override
             public void run() {
                 FileLoadOperation operation = loadOperationPaths.remove(arg1);
-                if (MessageObject.isVoiceDocument(document) || MessageObject.isVoiceWebDocument(webDocument)) {
+                if (MessageObject.isVoiceDocument(document)) {
                     if (operation != null) {
                         if (operation.wasStarted()) {
                             currentAudioLoadOperationsCount--;
@@ -565,7 +531,7 @@ public class FileLoader {
                             break;
                         }
                     }
-                } else if (location != null || MessageObject.isImageWebDocument(webDocument)) {
+                } else if (location != null) {
                     if (operation != null) {
                         if (operation.wasStarted()) {
                             currentPhotoLoadOperationsCount--;
@@ -650,13 +616,6 @@ public class FileLoader {
                     }
                 } else if (message.media.webpage.document != null) {
                     return getAttachFileName(message.media.webpage.document);
-                } else if (message.media instanceof TLRPC.TL_messageMediaInvoice) {
-                    return getAttachFileName(((TLRPC.TL_messageMediaInvoice) message.media).photo);
-                }
-            } else if (message.media instanceof TLRPC.TL_messageMediaInvoice) {
-                TLRPC.TL_webDocument document = ((TLRPC.TL_messageMediaInvoice) message.media).photo;
-                if (document != null) {
-                    return Utilities.MD5(document.url) + "." + ImageLoader.getHttpUrlExtension(document.url, getExtensionByMime(document.mime_type));
                 }
             }
         }
@@ -679,13 +638,13 @@ public class FileLoader {
             }
         } else {
             if (message.media instanceof TLRPC.TL_messageMediaDocument) {
-                return getPathToAttach(message.media.document, message.media.ttl_seconds != 0);
+                return getPathToAttach(message.media.document);
             } else if (message.media instanceof TLRPC.TL_messageMediaPhoto) {
                 ArrayList<TLRPC.PhotoSize> sizes = message.media.photo.sizes;
                 if (sizes.size() > 0) {
                     TLRPC.PhotoSize sizeFull = getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize());
                     if (sizeFull != null) {
-                        return getPathToAttach(sizeFull, message.media.ttl_seconds != 0);
+                        return getPathToAttach(sizeFull);
                     }
                 }
             } else if (message.media instanceof TLRPC.TL_messageMediaWebPage) {
@@ -700,8 +659,6 @@ public class FileLoader {
                         }
                     }
                 }
-            } else if (message.media instanceof TLRPC.TL_messageMediaInvoice) {
-                return getPathToAttach(((TLRPC.TL_messageMediaInvoice) message.media).photo, true);
             }
         }
         return new File("");
@@ -746,17 +703,6 @@ public class FileLoader {
                     dir = getInstance().getDirectory(MEDIA_DIR_CACHE);
                 } else {
                     dir = getInstance().getDirectory(MEDIA_DIR_IMAGE);
-                }
-            } else if (attach instanceof TLRPC.TL_webDocument) {
-                TLRPC.TL_webDocument document = (TLRPC.TL_webDocument) attach;
-                if (document.mime_type.startsWith("image/")) {
-                    dir = getInstance().getDirectory(MEDIA_DIR_IMAGE);
-                } else if (document.mime_type.startsWith("audio/")) {
-                    dir = getInstance().getDirectory(MEDIA_DIR_AUDIO);
-                } else if (document.mime_type.startsWith("video/")) {
-                    dir = getInstance().getDirectory(MEDIA_DIR_VIDEO);
-                } else {
-                    dir = getInstance().getDirectory(MEDIA_DIR_DOCUMENT);
                 }
             }
         }
@@ -820,18 +766,6 @@ public class FileLoader {
             }
         }
         return "";
-    }
-
-    public static String getExtensionByMime(String mime) {
-        int index;
-        if ((index = mime.indexOf('/')) != -1) {
-            return mime.substring(index + 1);
-        }
-        return "";
-    }
-
-    public static File getInternalCacheDir() {
-        return ApplicationLoader.applicationContext.getCacheDir();
     }
 
     public static String getDocumentExtension(TLRPC.Document document) {
@@ -898,9 +832,6 @@ public class FileLoader {
                     return document.dc_id + "_" + document.id + "_" + document.version;
                 }
             }
-        } else if (attach instanceof TLRPC.TL_webDocument) {
-            TLRPC.TL_webDocument document = (TLRPC.TL_webDocument) attach;
-            return Utilities.MD5(document.url) + "." + ImageLoader.getHttpUrlExtension(document.url, getExtensionByMime(document.mime_type));
         } else if (attach instanceof TLRPC.PhotoSize) {
             TLRPC.PhotoSize photo = (TLRPC.PhotoSize) attach;
             if (photo.location == null || photo.location instanceof TLRPC.TL_fileLocationUnavailable) {
@@ -926,30 +857,13 @@ public class FileLoader {
             public void run() {
                 for (int a = 0; a < files.size(); a++) {
                     File file = files.get(a);
-                    File encrypted = new File(file.getAbsolutePath() + ".enc");
-                    if (encrypted.exists()) {
-                        try {
-                            if (!encrypted.delete()) {
-                                encrypted.deleteOnExit();
-                            }
-                        } catch (Exception e) {
-                            FileLog.e(e);
-                        }
-                        try {
-                            File key = new File(FileLoader.getInternalCacheDir(), file.getName() + ".enc.key");
-                            if (!key.delete()) {
-                                key.deleteOnExit();
-                            }
-                        } catch (Exception e) {
-                            FileLog.e(e);
-                        }
-                    } else if (file.exists()) {
+                    if (file.exists()) {
                         try {
                             if (!file.delete()) {
                                 file.deleteOnExit();
                             }
                         } catch (Exception e) {
-                            FileLog.e(e);
+                            FileLog.e("tmessages", e);
                         }
                     }
                     try {
@@ -960,7 +874,7 @@ public class FileLoader {
                             }
                         }
                     } catch (Exception e) {
-                        FileLog.e(e);
+                        FileLog.e("tmessages", e);
                     }
                 }
                 if (type == 2) {

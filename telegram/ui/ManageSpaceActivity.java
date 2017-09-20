@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
@@ -34,6 +34,7 @@ import org.telegram.ui.ActionBar.ActionBarLayout;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.DrawerLayoutContainer;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.ActionBar.Theme;
 
 import java.util.ArrayList;
 
@@ -57,6 +58,7 @@ public class ManageSpaceActivity extends Activity implements ActionBarLayout.Act
         getWindow().setBackgroundDrawableResource(R.drawable.transparent);
 
         super.onCreate(savedInstanceState);
+        Theme.loadRecources(this);
 
         int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
         if (resourceId > 0) {
@@ -243,7 +245,11 @@ public class ManageSpaceActivity extends Activity implements ActionBarLayout.Act
             public void onGlobalLayout() {
                 needLayout();
                 if (actionBarLayout != null) {
-                    actionBarLayout.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                    if (Build.VERSION.SDK_INT < 16) {
+                        actionBarLayout.getViewTreeObserver().removeGlobalOnLayoutListener(this);
+                    } else {
+                        actionBarLayout.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                    }
                 }
             }
         });
@@ -288,10 +294,8 @@ public class ManageSpaceActivity extends Activity implements ActionBarLayout.Act
             text = LocaleController.getString("Connecting", R.string.Connecting);
         } else if (currentConnectionState == ConnectionsManager.ConnectionStateUpdating) {
             text = LocaleController.getString("Updating", R.string.Updating);
-        } else if (currentConnectionState == ConnectionsManager.ConnectionStateConnectingToProxy) {
-            text = LocaleController.getString("ConnectingToProxy", R.string.ConnectingToProxy);
         }
-        actionBarLayout.setTitleOverlayText(text, null, null);
+        actionBarLayout.setTitleOverlayText(text);
     }
 
     @Override
@@ -356,7 +360,8 @@ public class ManageSpaceActivity extends Activity implements ActionBarLayout.Act
     public void onRebuildAllFragments(ActionBarLayout layout) {
         if (AndroidUtilities.isTablet()) {
             if (layout == layersActionBarLayout) {
-                actionBarLayout.rebuildAllFragmentViews(true, true);
+                actionBarLayout.rebuildAllFragmentViews(true);
+                actionBarLayout.showLastFragment();
             }
         }
     }

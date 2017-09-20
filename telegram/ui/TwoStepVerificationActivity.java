@@ -3,12 +3,14 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
 
+import android.app.AlertDialog;
 import android.app.Dialog;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.Typeface;
@@ -21,12 +23,16 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
+import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -36,8 +42,6 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
-import org.telegram.messenger.support.widget.LinearLayoutManager;
-import org.telegram.messenger.support.widget.RecyclerView;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.TLObject;
@@ -46,26 +50,22 @@ import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
-import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
-import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.ActionBar.ThemeDescription;
+import org.telegram.ui.Adapters.BaseFragmentAdapter;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Cells.TextSettingsCell;
-import org.telegram.ui.Components.EmptyTextProgressView;
 import org.telegram.ui.Components.LayoutHelper;
-import org.telegram.ui.Components.RecyclerListView;
 
 public class TwoStepVerificationActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
     private ListAdapter listAdapter;
-    private RecyclerListView listView;
+    private ListView listView;
     private TextView titleTextView;
     private TextView bottomTextView;
     private TextView bottomButton;
     private EditText passwordEditText;
-    private AlertDialog progressDialog;
-    private EmptyTextProgressView emptyView;
+    private ProgressDialog progressDialog;
+    private FrameLayout progressView;
     private ActionBarMenuItem doneItem;
     private ScrollView scrollView;
 
@@ -131,7 +131,7 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
             try {
                 progressDialog.dismiss();
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
             progressDialog = null;
         }
@@ -155,30 +155,42 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
 
         fragmentView = new FrameLayout(context);
         FrameLayout frameLayout = (FrameLayout) fragmentView;
-        frameLayout.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
+        frameLayout.setBackgroundColor(0xfff0f0f0);
 
         ActionBarMenu menu = actionBar.createMenu();
         doneItem = menu.addItemWithWidth(done_button, R.drawable.ic_done, AndroidUtilities.dp(56));
 
         scrollView = new ScrollView(context);
         scrollView.setFillViewport(true);
-        frameLayout.addView(scrollView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        frameLayout.addView(scrollView);
+        FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) scrollView.getLayoutParams();
+        layoutParams.width = LayoutHelper.MATCH_PARENT;
+        layoutParams.height = LayoutHelper.MATCH_PARENT;
+        scrollView.setLayoutParams(layoutParams);
 
         LinearLayout linearLayout = new LinearLayout(context);
         linearLayout.setOrientation(LinearLayout.VERTICAL);
-        scrollView.addView(linearLayout, LayoutHelper.createScroll(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP));
+        scrollView.addView(linearLayout);
+        ScrollView.LayoutParams layoutParams2 = (ScrollView.LayoutParams) linearLayout.getLayoutParams();
+        layoutParams2.width = ScrollView.LayoutParams.MATCH_PARENT;
+        layoutParams2.height = ScrollView.LayoutParams.WRAP_CONTENT;
+        linearLayout.setLayoutParams(layoutParams2);
 
         titleTextView = new TextView(context);
-        titleTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText6));
+        titleTextView.setTextColor(0xff757575);
         titleTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
         titleTextView.setGravity(Gravity.CENTER_HORIZONTAL);
-        linearLayout.addView(titleTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 38, 0, 0));
+        linearLayout.addView(titleTextView);
+        LinearLayout.LayoutParams layoutParams3 = (LinearLayout.LayoutParams) titleTextView.getLayoutParams();
+        layoutParams3.width = LayoutHelper.WRAP_CONTENT;
+        layoutParams3.height = LayoutHelper.WRAP_CONTENT;
+        layoutParams3.gravity = Gravity.CENTER_HORIZONTAL;
+        layoutParams3.topMargin = AndroidUtilities.dp(38);
+        titleTextView.setLayoutParams(layoutParams3);
 
         passwordEditText = new EditText(context);
         passwordEditText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
-        passwordEditText.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        passwordEditText.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));
-        passwordEditText.setBackgroundDrawable(Theme.createEditTextDrawable(context, false));
+        passwordEditText.setTextColor(0xff000000);
         passwordEditText.setMaxLines(1);
         passwordEditText.setLines(1);
         passwordEditText.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -187,7 +199,15 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
         passwordEditText.setTransformationMethod(PasswordTransformationMethod.getInstance());
         passwordEditText.setTypeface(Typeface.DEFAULT);
         AndroidUtilities.clearCursorDrawable(passwordEditText);
-        linearLayout.addView(passwordEditText, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 36, Gravity.TOP | Gravity.LEFT, 40, 32, 40, 0));
+        linearLayout.addView(passwordEditText);
+        layoutParams3 = (LinearLayout.LayoutParams) passwordEditText.getLayoutParams();
+        layoutParams3.topMargin = AndroidUtilities.dp(32);
+        layoutParams3.height = AndroidUtilities.dp(36);
+        layoutParams3.leftMargin = AndroidUtilities.dp(40);
+        layoutParams3.rightMargin = AndroidUtilities.dp(40);
+        layoutParams3.gravity = Gravity.TOP | Gravity.LEFT;
+        layoutParams3.width = LayoutHelper.MATCH_PARENT;
+        passwordEditText.setLayoutParams(layoutParams3);
         passwordEditText.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             @Override
             public boolean onEditorAction(TextView textView, int i, KeyEvent keyEvent) {
@@ -216,23 +236,43 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
         });
 
         bottomTextView = new TextView(context);
-        bottomTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText6));
+        bottomTextView.setTextColor(0xff757575);
         bottomTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         bottomTextView.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);
         bottomTextView.setText(LocaleController.getString("YourEmailInfo", R.string.YourEmailInfo));
-        linearLayout.addView(bottomTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, 40, 30, 40, 0));
+        linearLayout.addView(bottomTextView);
+        layoutParams3 = (LinearLayout.LayoutParams) bottomTextView.getLayoutParams();
+        layoutParams3.width = LayoutHelper.WRAP_CONTENT;
+        layoutParams3.height = LayoutHelper.WRAP_CONTENT;
+        layoutParams3.gravity = (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP;
+        layoutParams3.topMargin = AndroidUtilities.dp(30);
+        layoutParams3.leftMargin = AndroidUtilities.dp(40);
+        layoutParams3.rightMargin = AndroidUtilities.dp(40);
+        bottomTextView.setLayoutParams(layoutParams3);
 
         LinearLayout linearLayout2 = new LinearLayout(context);
         linearLayout2.setGravity(Gravity.BOTTOM | Gravity.CENTER_VERTICAL);
-        linearLayout.addView(linearLayout2, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        linearLayout.addView(linearLayout2);
+        layoutParams3 = (LinearLayout.LayoutParams) linearLayout2.getLayoutParams();
+        layoutParams3.width = LayoutHelper.MATCH_PARENT;
+        layoutParams3.height = LayoutHelper.MATCH_PARENT;
+        linearLayout2.setLayoutParams(layoutParams3);
 
         bottomButton = new TextView(context);
-        bottomButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+        bottomButton.setTextColor(0xff4d83b3);
         bottomButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         bottomButton.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.BOTTOM);
         bottomButton.setText(LocaleController.getString("YourEmailSkip", R.string.YourEmailSkip));
         bottomButton.setPadding(0, AndroidUtilities.dp(10), 0, 0);
-        linearLayout2.addView(bottomButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.BOTTOM, 40, 0, 40, 14));
+        linearLayout2.addView(bottomButton);
+        layoutParams3 = (LinearLayout.LayoutParams) bottomButton.getLayoutParams();
+        layoutParams3.width = LayoutHelper.WRAP_CONTENT;
+        layoutParams3.height = LayoutHelper.WRAP_CONTENT;
+        layoutParams3.gravity = (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.BOTTOM;
+        layoutParams3.bottomMargin = AndroidUtilities.dp(14);
+        layoutParams3.leftMargin = AndroidUtilities.dp(40);
+        layoutParams3.rightMargin = AndroidUtilities.dp(40);
+        bottomButton.setLayoutParams(layoutParams3);
         bottomButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -310,31 +350,56 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
         });
 
         if (type == 0) {
-            emptyView = new EmptyTextProgressView(context);
-            emptyView.showProgress();
-
-            listView = new RecyclerListView(context);
-            listView.setLayoutManager(new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false));
-            listView.setEmptyView(emptyView);
-            listView.setVerticalScrollBarEnabled(false);
-            frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-            listView.setAdapter(listAdapter = new ListAdapter(context));
-            listView.setOnItemClickListener(new RecyclerListView.OnItemClickListener() {
+            progressView = new FrameLayout(context);
+            frameLayout.addView(progressView);
+            layoutParams = (FrameLayout.LayoutParams) progressView.getLayoutParams();
+            layoutParams.width = LayoutHelper.MATCH_PARENT;
+            layoutParams.height = LayoutHelper.MATCH_PARENT;
+            progressView.setLayoutParams(layoutParams);
+            progressView.setOnTouchListener(new View.OnTouchListener() {
                 @Override
-                public void onItemClick(View view, int position) {
-                    if (position == setPasswordRow || position == changePasswordRow) {
+                public boolean onTouch(View v, MotionEvent event) {
+                    return true;
+                }
+            });
+
+            ProgressBar progressBar = new ProgressBar(context);
+            progressView.addView(progressBar);
+            layoutParams = (FrameLayout.LayoutParams) progressView.getLayoutParams();
+            layoutParams.width = LayoutHelper.WRAP_CONTENT;
+            layoutParams.height = LayoutHelper.WRAP_CONTENT;
+            layoutParams.gravity = Gravity.CENTER;
+            progressView.setLayoutParams(layoutParams);
+
+            listView = new ListView(context);
+            listView.setDivider(null);
+            listView.setEmptyView(progressView);
+            listView.setDividerHeight(0);
+            listView.setVerticalScrollBarEnabled(false);
+            listView.setDrawSelectorOnTop(true);
+            frameLayout.addView(listView);
+            layoutParams = (FrameLayout.LayoutParams) listView.getLayoutParams();
+            layoutParams.width = LayoutHelper.MATCH_PARENT;
+            layoutParams.height = LayoutHelper.MATCH_PARENT;
+            layoutParams.gravity = Gravity.TOP;
+            listView.setLayoutParams(layoutParams);
+            listView.setAdapter(listAdapter = new ListAdapter(context));
+            listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+                @Override
+                public void onItemClick(AdapterView<?> adapterView, View view, final int i, long l) {
+                    if (i == setPasswordRow || i == changePasswordRow) {
                         TwoStepVerificationActivity fragment = new TwoStepVerificationActivity(1);
                         fragment.currentPasswordHash = currentPasswordHash;
                         fragment.currentPassword = currentPassword;
                         presentFragment(fragment);
-                    } else if (position == setRecoveryEmailRow || position == changeRecoveryEmailRow) {
+                    } else if (i == setRecoveryEmailRow || i == changeRecoveryEmailRow) {
                         TwoStepVerificationActivity fragment = new TwoStepVerificationActivity(1);
                         fragment.currentPasswordHash = currentPasswordHash;
                         fragment.currentPassword = currentPassword;
                         fragment.emailOnly = true;
                         fragment.passwordSetState = 3;
                         presentFragment(fragment);
-                    } else if (position == turnPasswordOffRow || position == abortPasswordRow) {
+                    } else if (i == turnPasswordOffRow || i == abortPasswordRow) {
                         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
                         builder.setMessage(LocaleController.getString("TurnPasswordOffQuestion", R.string.TurnPasswordOffQuestion));
                         builder.setTitle(LocaleController.getString("AppName", R.string.AppName));
@@ -399,9 +464,6 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
     private void loadPasswordInfo(final boolean silent) {
         if (!silent) {
             loading = true;
-            if (listAdapter != null) {
-                listAdapter.notifyDataSetChanged();
-            }
         }
         TLRPC.TL_account_getPassword req = new TLRPC.TL_account_getPassword();
         ConnectionsManager.getInstance().sendRequest(req, new RequestDelegate() {
@@ -540,8 +602,8 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
             if (listView != null) {
                 listView.setVisibility(View.VISIBLE);
                 scrollView.setVisibility(View.INVISIBLE);
-                emptyView.setVisibility(View.VISIBLE);
-                listView.setEmptyView(emptyView);
+                progressView.setVisibility(View.VISIBLE);
+                listView.setEmptyView(progressView);
             }
             if (passwordEditText != null) {
                 doneItem.setVisibility(View.GONE);
@@ -555,7 +617,7 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
                 listView.setEmptyView(null);
                 listView.setVisibility(View.INVISIBLE);
                 scrollView.setVisibility(View.VISIBLE);
-                emptyView.setVisibility(View.INVISIBLE);
+                progressView.setVisibility(View.INVISIBLE);
             }
             if (passwordEditText != null) {
                 doneItem.setVisibility(View.VISIBLE);
@@ -586,7 +648,7 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
         if (getParentActivity() == null || getParentActivity().isFinishing() || progressDialog != null) {
             return;
         }
-        progressDialog = new AlertDialog(getParentActivity(), 1);
+        progressDialog = new ProgressDialog(getParentActivity());
         progressDialog.setMessage(LocaleController.getString("Loading", R.string.Loading));
         progressDialog.setCanceledOnTouchOutside(false);
         progressDialog.setCancelable(false);
@@ -600,7 +662,7 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
         try {
             progressDialog.dismiss();
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
         progressDialog = null;
     }
@@ -644,7 +706,7 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
                 try {
                     newPasswordBytes = firstPassword.getBytes("UTF-8");
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
 
                 byte[] new_salt = currentPassword.new_salt;
@@ -675,7 +737,6 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
                                 currentPassword = null;
                                 currentPasswordHash = new byte[0];
                                 loadPasswordInfo(false);
-                                NotificationCenter.getInstance().postNotificationName(NotificationCenter.didRemovedTwoStepPassword);
                                 updateRows();
                             } else {
                                 if (getParentActivity() == null) {
@@ -749,7 +810,7 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
                 try {
                     oldPasswordBytes = oldPassword.getBytes("UTF-8");
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
 
                 needShowProgress();
@@ -807,7 +868,7 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
                     try {
                         Toast.makeText(getParentActivity(), LocaleController.getString("PasswordDoNotMatch", R.string.PasswordDoNotMatch), Toast.LENGTH_SHORT).show();
                     } catch (Exception e) {
-                        FileLog.e(e);
+                        FileLog.e("tmessages", e);
                     }
                     onPasscodeError(true);
                     return;
@@ -819,7 +880,7 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
                     try {
                         Toast.makeText(getParentActivity(), LocaleController.getString("PasswordAsHintError", R.string.PasswordAsHintError), Toast.LENGTH_SHORT).show();
                     } catch (Exception e) {
-                        FileLog.e(e);
+                        FileLog.e("tmessages", e);
                     }
                     onPasscodeError(false);
                     return;
@@ -905,8 +966,7 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
         AndroidUtilities.shakeView(titleTextView, 2, 0);
     }
 
-    private class ListAdapter extends RecyclerListView.SelectionAdapter {
-
+    private class ListAdapter extends BaseFragmentAdapter {
         private Context mContext;
 
         public ListAdapter(Context context) {
@@ -914,117 +974,99 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
         }
 
         @Override
-        public boolean isEnabled(RecyclerView.ViewHolder holder) {
-            int position = holder.getAdapterPosition();
-            return position != setPasswordDetailRow && position != shadowRow && position != passwordSetupDetailRow && position != passwordEmailVerifyDetailRow && position != passwordEnabledDetailRow;
+        public boolean areAllItemsEnabled() {
+            return false;
         }
 
         @Override
-        public int getItemCount() {
+        public boolean isEnabled(int i) {
+            return i != setPasswordDetailRow && i != shadowRow && i != passwordSetupDetailRow && i != passwordEmailVerifyDetailRow && i != passwordEnabledDetailRow;
+        }
+
+        @Override
+        public int getCount() {
             return loading || currentPassword == null ? 0 : rowCount;
         }
 
         @Override
-        public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            View view;
-            switch (viewType) {
-                case 0:
+        public Object getItem(int i) {
+            return null;
+        }
+
+        @Override
+        public long getItemId(int i) {
+            return i;
+        }
+
+        @Override
+        public boolean hasStableIds() {
+            return false;
+        }
+
+        @Override
+        public View getView(int i, View view, ViewGroup viewGroup) {
+            int viewType = getItemViewType(i);
+            if (viewType == 0) {
+                if (view == null) {
                     view = new TextSettingsCell(mContext);
-                    view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-                    break;
-                case 1:
-                default:
+                    view.setBackgroundColor(0xffffffff);
+                }
+                TextSettingsCell textCell = (TextSettingsCell) view;
+                textCell.setTextColor(0xff212121);
+                if (i == changePasswordRow) {
+                    textCell.setText(LocaleController.getString("ChangePassword", R.string.ChangePassword), true);
+                } else if (i == setPasswordRow) {
+                    textCell.setText(LocaleController.getString("SetAdditionalPassword", R.string.SetAdditionalPassword), true);
+                } else if (i == turnPasswordOffRow) {
+                    textCell.setText(LocaleController.getString("TurnPasswordOff", R.string.TurnPasswordOff), true);
+                } else if (i == changeRecoveryEmailRow) {
+                    textCell.setText(LocaleController.getString("ChangeRecoveryEmail", R.string.ChangeRecoveryEmail), abortPasswordRow != -1);
+                } else if (i == setRecoveryEmailRow) {
+                    textCell.setText(LocaleController.getString("SetRecoveryEmail", R.string.SetRecoveryEmail), false);
+                } else if (i == abortPasswordRow) {
+                    textCell.setTextColor(0xffd24949);
+                    textCell.setText(LocaleController.getString("AbortPassword", R.string.AbortPassword), false);
+                }
+            } else if (viewType == 1) {
+                if (view == null) {
                     view = new TextInfoPrivacyCell(mContext);
-                    break;
+                }
+                if (i == setPasswordDetailRow) {
+                    ((TextInfoPrivacyCell) view).setText(LocaleController.getString("SetAdditionalPasswordInfo", R.string.SetAdditionalPasswordInfo));
+                    view.setBackgroundResource(R.drawable.greydivider_bottom);
+                } else if (i == shadowRow) {
+                    ((TextInfoPrivacyCell) view).setText("");
+                    view.setBackgroundResource(R.drawable.greydivider_bottom);
+                } else if (i == passwordSetupDetailRow) {
+                    ((TextInfoPrivacyCell) view).setText(LocaleController.formatString("EmailPasswordConfirmText", R.string.EmailPasswordConfirmText, currentPassword.email_unconfirmed_pattern));
+                    view.setBackgroundResource(R.drawable.greydivider_top);
+                } else if (i == passwordEnabledDetailRow) {
+                    ((TextInfoPrivacyCell) view).setText(LocaleController.getString("EnabledPasswordText", R.string.EnabledPasswordText));
+                    view.setBackgroundResource(R.drawable.greydivider_bottom);
+                } else if (i == passwordEmailVerifyDetailRow) {
+                    ((TextInfoPrivacyCell) view).setText(LocaleController.formatString("PendingEmailText", R.string.PendingEmailText, currentPassword.email_unconfirmed_pattern));
+                    view.setBackgroundResource(R.drawable.greydivider_bottom);
+                }
             }
-            return new RecyclerListView.Holder(view);
+            return view;
         }
 
         @Override
-        public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
-            switch (holder.getItemViewType()) {
-                case 0:
-                    TextSettingsCell textCell = (TextSettingsCell) holder.itemView;
-                    textCell.setTag(Theme.key_windowBackgroundWhiteBlackText);
-                    textCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-                    if (position == changePasswordRow) {
-                        textCell.setText(LocaleController.getString("ChangePassword", R.string.ChangePassword), true);
-                    } else if (position == setPasswordRow) {
-                        textCell.setText(LocaleController.getString("SetAdditionalPassword", R.string.SetAdditionalPassword), true);
-                    } else if (position == turnPasswordOffRow) {
-                        textCell.setText(LocaleController.getString("TurnPasswordOff", R.string.TurnPasswordOff), true);
-                    } else if (position == changeRecoveryEmailRow) {
-                        textCell.setText(LocaleController.getString("ChangeRecoveryEmail", R.string.ChangeRecoveryEmail), abortPasswordRow != -1);
-                    } else if (position == setRecoveryEmailRow) {
-                        textCell.setText(LocaleController.getString("SetRecoveryEmail", R.string.SetRecoveryEmail), false);
-                    } else if (position == abortPasswordRow) {
-                        textCell.setTag(Theme.key_windowBackgroundWhiteRedText3);
-                        textCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteRedText3));
-                        textCell.setText(LocaleController.getString("AbortPassword", R.string.AbortPassword), false);
-                    }
-                    break;
-                case 1:
-                    TextInfoPrivacyCell privacyCell = (TextInfoPrivacyCell) holder.itemView;
-                    if (position == setPasswordDetailRow) {
-                        privacyCell.setText(LocaleController.getString("SetAdditionalPasswordInfo", R.string.SetAdditionalPasswordInfo));
-                        privacyCell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
-                    } else if (position == shadowRow) {
-                        privacyCell.setText("");
-                        privacyCell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
-                    } else if (position == passwordSetupDetailRow) {
-                        privacyCell.setText(LocaleController.formatString("EmailPasswordConfirmText", R.string.EmailPasswordConfirmText, currentPassword.email_unconfirmed_pattern));
-                        privacyCell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_top, Theme.key_windowBackgroundGrayShadow));
-                    } else if (position == passwordEnabledDetailRow) {
-                        privacyCell.setText(LocaleController.getString("EnabledPasswordText", R.string.EnabledPasswordText));
-                        privacyCell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
-                    } else if (position == passwordEmailVerifyDetailRow) {
-                        privacyCell.setText(LocaleController.formatString("PendingEmailText", R.string.PendingEmailText, currentPassword.email_unconfirmed_pattern));
-                        privacyCell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
-                    }
-                    break;
-            }
-        }
-
-        @Override
-        public int getItemViewType(int position) {
-            if (position == setPasswordDetailRow || position == shadowRow || position == passwordSetupDetailRow || position == passwordEnabledDetailRow || position == passwordEmailVerifyDetailRow) {
+        public int getItemViewType(int i) {
+            if (i == setPasswordDetailRow || i == shadowRow || i == passwordSetupDetailRow || i == passwordEnabledDetailRow || i == passwordEmailVerifyDetailRow) {
                 return 1;
             }
             return 0;
         }
-    }
 
-    @Override
-    public ThemeDescription[] getThemeDescriptions() {
-        return new ThemeDescription[]{
-                new ThemeDescription(listView, ThemeDescription.FLAG_CELLBACKGROUNDCOLOR, new Class[]{TextSettingsCell.class}, null, null, null, Theme.key_windowBackgroundWhite),
-                new ThemeDescription(fragmentView, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundGray),
+        @Override
+        public int getViewTypeCount() {
+            return 2;
+        }
 
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_actionBarDefault),
-                new ThemeDescription(listView, ThemeDescription.FLAG_LISTGLOWCOLOR, null, null, null, null, Theme.key_actionBarDefault),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_ITEMSCOLOR, null, null, null, null, Theme.key_actionBarDefaultIcon),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_TITLECOLOR, null, null, null, null, Theme.key_actionBarDefaultTitle),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SELECTORCOLOR, null, null, null, null, Theme.key_actionBarDefaultSelector),
-
-                new ThemeDescription(listView, ThemeDescription.FLAG_SELECTOR, null, null, null, null, Theme.key_listSelector),
-
-                new ThemeDescription(listView, 0, new Class[]{View.class}, Theme.dividerPaint, null, null, Theme.key_divider),
-
-                new ThemeDescription(emptyView, ThemeDescription.FLAG_PROGRESSBAR, null, null, null, null, Theme.key_progressCircle),
-
-                new ThemeDescription(listView, ThemeDescription.FLAG_CHECKTAG, new Class[]{TextSettingsCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlackText),
-                new ThemeDescription(listView, ThemeDescription.FLAG_CHECKTAG, new Class[]{TextSettingsCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteRedText3),
-
-                new ThemeDescription(listView, ThemeDescription.FLAG_BACKGROUNDFILTER, new Class[]{TextInfoPrivacyCell.class}, null, null, null, Theme.key_windowBackgroundGrayShadow),
-                new ThemeDescription(listView, 0, new Class[]{TextInfoPrivacyCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText4),
-
-                new ThemeDescription(titleTextView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteGrayText6),
-                new ThemeDescription(bottomTextView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteGrayText6),
-                new ThemeDescription(bottomButton, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlueText4),
-                new ThemeDescription(passwordEditText, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlackText),
-                new ThemeDescription(passwordEditText, ThemeDescription.FLAG_HINTTEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteHintText),
-                new ThemeDescription(passwordEditText, ThemeDescription.FLAG_BACKGROUNDFILTER, null, null, null, null, Theme.key_windowBackgroundWhiteInputField),
-                new ThemeDescription(passwordEditText, ThemeDescription.FLAG_BACKGROUNDFILTER | ThemeDescription.FLAG_DRAWABLESELECTEDSTATE, null, null, null, null, Theme.key_windowBackgroundWhiteInputFieldActivated),
-        };
+        @Override
+        public boolean isEmpty() {
+            return loading || currentPassword == null;
+        }
     }
 }

@@ -3,13 +3,12 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
 
 import android.content.Context;
-import android.graphics.drawable.Drawable;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -27,7 +26,6 @@ import org.telegram.messenger.query.StickersQuery;
 import org.telegram.messenger.support.widget.GridLayoutManager;
 import org.telegram.messenger.support.widget.RecyclerView;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.EmptyCell;
 import org.telegram.ui.Cells.StickerEmojiCell;
 import org.telegram.ui.StickerPreviewViewer;
@@ -70,7 +68,7 @@ public class StickerMasksView extends FrameLayout implements NotificationCenter.
         stickersGridView = new RecyclerListView(context) {
             @Override
             public boolean onInterceptTouchEvent(MotionEvent event) {
-                boolean result = StickerPreviewViewer.getInstance().onInterceptTouchEvent(event, stickersGridView, StickerMasksView.this.getMeasuredHeight(), null);
+                boolean result = StickerPreviewViewer.getInstance().onInterceptTouchEvent(event, stickersGridView, StickerMasksView.this.getMeasuredHeight());
                 return super.onInterceptTouchEvent(event) || result;
             }
         };
@@ -91,7 +89,7 @@ public class StickerMasksView extends FrameLayout implements NotificationCenter.
         stickersGridView.setOnTouchListener(new OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                return StickerPreviewViewer.getInstance().onTouch(event, stickersGridView, StickerMasksView.this.getMeasuredHeight(), stickersOnItemClickListener, null);
+                return StickerPreviewViewer.getInstance().onTouch(event, stickersGridView, StickerMasksView.this.getMeasuredHeight(), stickersOnItemClickListener);
             }
         });
         stickersOnItemClickListener = new RecyclerListView.OnItemClickListener() {
@@ -199,21 +197,17 @@ public class StickerMasksView extends FrameLayout implements NotificationCenter.
         int lastPosition = scrollSlidingTabStrip.getCurrentPosition();
         scrollSlidingTabStrip.removeTabs();
         if (currentType == StickersQuery.TYPE_IMAGE) {
-            Drawable drawable = getContext().getResources().getDrawable(R.drawable.ic_masks_msk1);
-            Theme.setDrawableColorByKey(drawable, Theme.key_chat_emojiPanelIcon);
-            scrollSlidingTabStrip.addIconTab(drawable);
+            scrollSlidingTabStrip.addIconTab(R.drawable.ic_masks_msk1);
             stickersEmptyView.setText(LocaleController.getString("NoStickers", R.string.NoStickers));
         } else {
-            Drawable drawable = getContext().getResources().getDrawable(R.drawable.ic_masks_sticker1);
-            Theme.setDrawableColorByKey(drawable, Theme.key_chat_emojiPanelIcon);
-            scrollSlidingTabStrip.addIconTab(drawable);
+            scrollSlidingTabStrip.addIconTab(R.drawable.ic_masks_sticker1);
             stickersEmptyView.setText(LocaleController.getString("NoMasks", R.string.NoMasks));
         }
 
         if (!recentStickers[currentType].isEmpty()) {
             recentTabBum = stickersTabOffset;
             stickersTabOffset++;
-            scrollSlidingTabStrip.addIconTab(Theme.createEmojiIconSelectorDrawable(getContext(), R.drawable.ic_masks_recent1, Theme.getColor(Theme.key_chat_emojiPanelMasksIcon), Theme.getColor(Theme.key_chat_emojiPanelMasksIconSelected)));
+            scrollSlidingTabStrip.addIconTab(R.drawable.ic_masks_recent);
         }
 
         stickerSets[currentType].clear();
@@ -346,7 +340,7 @@ public class StickerMasksView extends FrameLayout implements NotificationCenter.
         }
     }
 
-    private class StickersGridAdapter extends RecyclerListView.SelectionAdapter {
+    private class StickersGridAdapter extends RecyclerView.Adapter {
 
         private Context context;
         private int stickersPerRow;
@@ -397,11 +391,6 @@ public class StickerMasksView extends FrameLayout implements NotificationCenter.
         }
 
         @Override
-        public boolean isEnabled(RecyclerView.ViewHolder holder) {
-            return false;
-        }
-
-        @Override
         public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
             View view = null;
             switch (viewType) {
@@ -417,7 +406,7 @@ public class StickerMasksView extends FrameLayout implements NotificationCenter.
                     break;
             }
 
-            return new RecyclerListView.Holder(view);
+            return new Holder(view);
         }
 
         @Override
@@ -481,6 +470,13 @@ public class StickerMasksView extends FrameLayout implements NotificationCenter.
                 }
             }
             super.notifyDataSetChanged();
+        }
+    }
+
+    private class Holder extends RecyclerView.ViewHolder {
+
+        public Holder(View itemView) {
+            super(itemView);
         }
     }
 }

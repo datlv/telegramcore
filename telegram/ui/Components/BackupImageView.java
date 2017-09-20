@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -81,7 +81,7 @@ public class BackupImageView extends View {
         if (thumbBitmap != null) {
             thumb = new BitmapDrawable(null, thumbBitmap);
         }
-        imageReceiver.setImage(path, httpUrl, filter, thumb, thumbLocation, thumbFilter, size, ext, 0);
+        imageReceiver.setImage(path, httpUrl, filter, thumb, thumbLocation, thumbFilter, size, ext, false);
     }
 
     public void setImageBitmap(Bitmap bitmap) {
@@ -89,9 +89,7 @@ public class BackupImageView extends View {
     }
 
     public void setImageResource(int resId) {
-        Drawable drawable = getResources().getDrawable(resId);
-        imageReceiver.setImageBitmap(drawable);
-        invalidate();
+        imageReceiver.setImageBitmap(getResources().getDrawable(resId));
     }
 
     public void setImageDrawable(Drawable drawable) {

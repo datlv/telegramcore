@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.telegram.messenger.support.widget.RecyclerView.*;
+
 /**
  * Helper class that can enqueue and process adapter update operations.
  * <p>
@@ -136,7 +138,7 @@ class AdapterHelper implements OpReorderer.Callback {
         int type = -1;
         for (int position = op.positionStart; position < tmpEnd; position++) {
             boolean typeChanged = false;
-            RecyclerView.ViewHolder vh = mCallback.findViewHolder(position);
+            ViewHolder vh = mCallback.findViewHolder(position);
             if (vh != null || canFindInPreLayout(position)) {
                 // If a ViewHolder exists or this is a newly added item, we can defer this update
                 // to post layout stage.
@@ -189,7 +191,7 @@ class AdapterHelper implements OpReorderer.Callback {
         int tmpEnd = op.positionStart + op.itemCount;
         int type = -1;
         for (int position = op.positionStart; position < tmpEnd; position++) {
-            RecyclerView.ViewHolder vh = mCallback.findViewHolder(position);
+            ViewHolder vh = mCallback.findViewHolder(position);
             if (vh != null || canFindInPreLayout(position)) { // deferred
                 if (type == POSITION_TYPE_INVISIBLE) {
                     UpdateOp newOp = obtainUpdateOp(UpdateOp.UPDATE, tmpStart, tmpCount,
@@ -500,9 +502,6 @@ class AdapterHelper implements OpReorderer.Callback {
      * @return True if updates should be processed.
      */
     boolean onItemRangeChanged(int positionStart, int itemCount, Object payload) {
-        if (itemCount < 1) {
-            return false;
-        }
         mPendingUpdates.add(obtainUpdateOp(UpdateOp.UPDATE, positionStart, itemCount, payload));
         mExistingUpdateTypes |= UpdateOp.UPDATE;
         return mPendingUpdates.size() == 1;
@@ -512,9 +511,6 @@ class AdapterHelper implements OpReorderer.Callback {
      * @return True if updates should be processed.
      */
     boolean onItemRangeInserted(int positionStart, int itemCount) {
-        if (itemCount < 1) {
-            return false;
-        }
         mPendingUpdates.add(obtainUpdateOp(UpdateOp.ADD, positionStart, itemCount, null));
         mExistingUpdateTypes |= UpdateOp.ADD;
         return mPendingUpdates.size() == 1;
@@ -524,9 +520,6 @@ class AdapterHelper implements OpReorderer.Callback {
      * @return True if updates should be processed.
      */
     boolean onItemRangeRemoved(int positionStart, int itemCount) {
-        if (itemCount < 1) {
-            return false;
-        }
         mPendingUpdates.add(obtainUpdateOp(UpdateOp.REMOVE, positionStart, itemCount, null));
         mExistingUpdateTypes |= UpdateOp.REMOVE;
         return mPendingUpdates.size() == 1;
@@ -754,9 +747,9 @@ class AdapterHelper implements OpReorderer.Callback {
     /**
      * Contract between AdapterHelper and RecyclerView.
      */
-    interface Callback {
+    static interface Callback {
 
-        RecyclerView.ViewHolder findViewHolder(int position);
+        ViewHolder findViewHolder(int position);
 
         void offsetPositionsForRemovingInvisible(int positionStart, int itemCount);
 

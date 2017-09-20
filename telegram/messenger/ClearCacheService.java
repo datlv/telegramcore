@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
@@ -38,15 +38,7 @@ public class ClearCacheService extends IntentService {
             @Override
             public void run() {
                 long currentTime = System.currentTimeMillis();
-                int days;
-                if (keepMedia == 0) {
-                    days = 7;
-                } else if (keepMedia == 1) {
-                    days = 30;
-                } else {
-                    days = 3;
-                }
-                long diff = 60 * 60 * 1000 * 24 * days;
+                long diff = 60 * 60 * 1000 * 24 * (keepMedia == 0 ? 7 : 30);
                 final HashMap<Integer, File> paths = ImageLoader.getInstance().createMediaPaths();
                 for (HashMap.Entry<Integer, File> entry : paths.entrySet()) {
                     if (entry.getKey() == FileLoader.MEDIA_DIR_CACHE) {
@@ -72,7 +64,7 @@ public class ClearCacheService extends IntentService {
                                                 f.delete();
                                             }
                                         } catch (Exception e) {
-                                            FileLog.e(e);
+                                            FileLog.e("tmessages", e);
                                         }
                                     } else if (f.lastModified() + diff < currentTime) {
                                         f.delete();
@@ -81,7 +73,7 @@ public class ClearCacheService extends IntentService {
                             }
                         }
                     } catch (Throwable e) {
-                        FileLog.e(e);
+                        FileLog.e("tmessages", e);
                     }
                 }
             }

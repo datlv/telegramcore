@@ -3,13 +3,15 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.ContentResolver;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -25,28 +27,28 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.provider.ContactsContract;
+import android.support.annotation.NonNull;
 import android.text.TextUtils;
 import android.view.ActionMode;
 import android.view.KeyEvent;
-import android.view.Menu;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.AbsListView;
+import android.widget.AdapterView;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.PhoneFormat.PhoneFormat;
-import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.ImageLoader;
-import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
@@ -60,29 +62,21 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.browser.Browser;
-import org.telegram.messenger.camera.CameraController;
 import org.telegram.messenger.query.DraftQuery;
-import org.telegram.messenger.support.widget.LinearLayoutManager;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.messenger.UserConfig;
-import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.Adapters.DrawerLayoutAdapter;
 import org.telegram.ui.ActionBar.ActionBarLayout;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.DrawerLayoutContainer;
-import org.telegram.ui.Cells.LanguageCell;
-import org.telegram.ui.Components.EmbedBottomSheet;
 import org.telegram.ui.Components.JoinGroupAlert;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.PasscodeView;
-import org.telegram.ui.Components.PipRoundVideoView;
-import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.StickersAlert;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Components.ThemeEditorView;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -119,12 +113,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
     private DrawerLayoutAdapter drawerLayoutAdapter;
     private PasscodeView passcodeView;
     private AlertDialog visibleDialog;
-    private RecyclerListView sideMenu;
-
-    private AlertDialog localeDialog;
-    private boolean loadingLocaleDialog;
-    private HashMap<String, String> systemLocaleStrings;
-    private HashMap<String, String> englishLocaleStrings;
+    private ListView listView;
 
     private Intent passcodeSaveIntent;
     private boolean passcodeSaveIntentIsNew;
@@ -147,18 +136,11 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                 finish();
                 return;
             }
-            SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
-            long crashed_time = preferences.getLong("intro_crashed_time", 0);
-            boolean fromIntro = intent.getBooleanExtra("fromIntro", false);
-            if (fromIntro) {
-                preferences.edit().putLong("intro_crashed_time", 0).commit();
-            }
-            if (Math.abs(crashed_time - System.currentTimeMillis()) >= 60 * 2 * 1000 && intent != null && !fromIntro) {
-                preferences = ApplicationLoader.applicationContext.getSharedPreferences("logininfo2", MODE_PRIVATE);
+            if (intent != null && !intent.getBooleanExtra("fromIntro", false)) {
+                SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("logininfo2", MODE_PRIVATE);
                 Map<String, ?> state = preferences.getAll();
                 if (state.isEmpty()) {
                     Intent intent2 = new Intent(this, IntroActivity.class);
-                    intent2.setData(intent.getData());
                     startActivity(intent2);
                     super.onCreate(savedInstanceState);
                     finish();
@@ -170,19 +152,13 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setTheme(R.style.Theme_TMessages);
         getWindow().setBackgroundDrawableResource(R.drawable.transparent);
-        if (UserConfig.passcodeHash.length() > 0 && !UserConfig.allowScreenCapture) {
-            try {
-                getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
-            } catch (Exception e) {
-                FileLog.e(e);
-            }
-        }
 
         super.onCreate(savedInstanceState);
         if (Build.VERSION.SDK_INT >= 24) {
             AndroidUtilities.isInMultiwindow = isInMultiWindowMode();
         }
-        Theme.createChatResources(this, false);
+        Theme.loadRecources(this);
+
         if (UserConfig.passcodeHash.length() != 0 && UserConfig.appLocked) {
             UserConfig.lastPauseTime = ConnectionsManager.getInstance().getCurrentTime();
         }
@@ -234,7 +210,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                     }
                     backgroundTablet.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
                     shadowTablet.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
-                    layersActionBarLayout.measure(MeasureSpec.makeMeasureSpec(Math.min(AndroidUtilities.dp(530), width), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Math.min(AndroidUtilities.dp(528), height), MeasureSpec.EXACTLY));
+                    layersActionBarLayout.measure(MeasureSpec.makeMeasureSpec(Math.min(AndroidUtilities.dp(530), width), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Math.min(AndroidUtilities.dp(528) - (Build.VERSION.SDK_INT >= 21 ? AndroidUtilities.statusBarHeight : 0), height), MeasureSpec.EXACTLY));
 
                     inLayout = false;
                 }
@@ -256,7 +232,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                         actionBarLayout.layout(0, 0, actionBarLayout.getMeasuredWidth(), actionBarLayout.getMeasuredHeight());
                     }
                     int x = (width - layersActionBarLayout.getMeasuredWidth()) / 2;
-                    int y = (height - layersActionBarLayout.getMeasuredHeight()) / 2;
+                    int y = (Build.VERSION.SDK_INT >= 21 ? AndroidUtilities.statusBarHeight : 0) + (height - layersActionBarLayout.getMeasuredHeight()) / 2;
                     layersActionBarLayout.layout(x, y, x + layersActionBarLayout.getMeasuredWidth(), y + layersActionBarLayout.getMeasuredHeight());
                     backgroundTablet.layout(0, 0, backgroundTablet.getMeasuredWidth(), backgroundTablet.getMeasuredHeight());
                     shadowTablet.layout(0, 0, shadowTablet.getMeasuredWidth(), shadowTablet.getMeasuredHeight());
@@ -283,7 +259,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
 
             shadowTablet = new FrameLayout(this);
             shadowTablet.setVisibility(layerFragmentsStack.isEmpty() ? View.GONE : View.VISIBLE);
-            shadowTablet.setBackgroundColor(0x7f000000);
+            shadowTablet.setBackgroundColor(0x7F000000);
             launchLayout.addView(shadowTablet);
             shadowTablet.setOnTouchListener(new View.OnTouchListener() {
                 @Override
@@ -334,32 +310,40 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
             drawerLayoutContainer.addView(actionBarLayout, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
 
-        sideMenu = new RecyclerListView(this);
-        sideMenu.setBackgroundColor(Theme.getColor(Theme.key_chats_menuBackground));
-        sideMenu.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
-        sideMenu.setAdapter(drawerLayoutAdapter = new DrawerLayoutAdapter(this));
-        drawerLayoutContainer.setDrawerLayout(sideMenu);
-        FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) sideMenu.getLayoutParams();
+        listView = new ListView(this) {
+            @Override
+            public boolean hasOverlappingRendering() {
+                return false;
+            }
+        };
+        listView.setBackgroundColor(0xffffffff);
+        listView.setAdapter(drawerLayoutAdapter = new DrawerLayoutAdapter(this));
+        listView.setChoiceMode(AbsListView.CHOICE_MODE_SINGLE);
+        listView.setDivider(null);
+        listView.setDividerHeight(0);
+        listView.setVerticalScrollBarEnabled(false);
+        drawerLayoutContainer.setDrawerLayout(listView);
+        FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) listView.getLayoutParams();
         Point screenSize = AndroidUtilities.getRealScreenSize();
         layoutParams.width = AndroidUtilities.isTablet() ? AndroidUtilities.dp(320) : Math.min(AndroidUtilities.dp(320), Math.min(screenSize.x, screenSize.y) - AndroidUtilities.dp(56));
         layoutParams.height = LayoutHelper.MATCH_PARENT;
-        sideMenu.setLayoutParams(layoutParams);
-        sideMenu.setOnItemClickListener(new RecyclerListView.OnItemClickListener() {
+        listView.setLayoutParams(layoutParams);
+
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
-            public void onItemClick(final View view, int position) {
-                int id = drawerLayoutAdapter.getId(position);
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 if (position == 0) {
                     Bundle args = new Bundle();
                     args.putInt("user_id", UserConfig.getClientUserId());
                     presentFragment(new ChatActivity(args));
                     drawerLayoutContainer.closeDrawer(false);
-                } else if (id == 2) {
+                } else if (position == 2) {
                     if (!MessagesController.isFeatureEnabled("chat_create", actionBarLayout.fragmentsStack.get(actionBarLayout.fragmentsStack.size() - 1))) {
                         return;
                     }
                     presentFragment(new GroupCreateActivity());
                     drawerLayoutContainer.closeDrawer(false);
-                } else if (id == 3) {
+                } else if (position == 3) {
                     Bundle args = new Bundle();
                     args.putBoolean("onlyUsers", true);
                     args.putBoolean("destroyAfterSelect", true);
@@ -367,12 +351,12 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                     args.putBoolean("allowBots", false);
                     presentFragment(new ContactsActivity(args));
                     drawerLayoutContainer.closeDrawer(false);
-                } else if (id == 4) {
+                } else if (position == 4) {
                     if (!MessagesController.isFeatureEnabled("broadcast_create", actionBarLayout.fragmentsStack.get(actionBarLayout.fragmentsStack.size() - 1))) {
                         return;
                     }
                     SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
-                    if (!BuildVars.DEBUG_VERSION && preferences.getBoolean("channel_intro", false)) {
+                    if (preferences.getBoolean("channel_intro", false)) {
                         Bundle args = new Bundle();
                         args.putInt("step", 0);
                         presentFragment(new ChannelCreateActivity(args));
@@ -381,42 +365,24 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                         preferences.edit().putBoolean("channel_intro", true).commit();
                     }
                     drawerLayoutContainer.closeDrawer(false);
-                } else if (id == 6) {
+                } else if (position == 6) {
                     presentFragment(new ContactsActivity(null));
                     drawerLayoutContainer.closeDrawer(false);
-                } else if (id == 7) {
-                    if (BuildVars.DEBUG_PRIVATE_VERSION) {
-                        /*AlertDialog.Builder builder = new AlertDialog.Builder(LaunchActivity.this);
-                        builder.setTopImage(R.drawable.permissions_contacts, 0xff35a8e0);
-                        builder.setMessage(AndroidUtilities.replaceTags(LocaleController.getString("ContactsPermissionAlert", R.string.ContactsPermissionAlert)));
-                        builder.setPositiveButton(LocaleController.getString("ContactsPermissionAlertContinue", R.string.ContactsPermissionAlertContinue), new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialogInterface, int i) {
-
-                            }
-                        });
-                        builder.setNegativeButton(LocaleController.getString("ContactsPermissionAlertNotNow", R.string.ContactsPermissionAlertNotNow), null);
-                        showAlertDialog(builder);*/
-                        showLanguageAlert(true);
-                    } else {
-                        try {
-                            Intent intent = new Intent(Intent.ACTION_SEND);
-                            intent.setType("text/plain");
-                            intent.putExtra(Intent.EXTRA_TEXT, ContactsController.getInstance().getInviteText());
-                            startActivityForResult(Intent.createChooser(intent, LocaleController.getString("InviteFriends", R.string.InviteFriends)), 500);
-                        } catch (Exception e) {
-                            FileLog.e(e);
-                        }
-                        drawerLayoutContainer.closeDrawer(false);
+                } else if (position == 7) {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_SEND);
+                        intent.setType("text/plain");
+                        intent.putExtra(Intent.EXTRA_TEXT, ContactsController.getInstance().getInviteText());
+                        startActivityForResult(Intent.createChooser(intent, LocaleController.getString("InviteFriends", R.string.InviteFriends)), 500);
+                    } catch (Exception e) {
+                        FileLog.e("tmessages", e);
                     }
-                } else if (id == 8) {
+                    drawerLayoutContainer.closeDrawer(false);
+                } else if (position == 8) {
                     presentFragment(new SettingsActivity());
                     drawerLayoutContainer.closeDrawer(false);
-                } else if (id == 9) {
+                } else if (position == 9) {
                     Browser.openUrl(LaunchActivity.this, LocaleController.getString("TelegramFaqUrl", R.string.TelegramFaqUrl));
-                    drawerLayoutContainer.closeDrawer(false);
-                } else if (id == 10) {
-                    presentFragment(new CallLogActivity());
                     drawerLayoutContainer.closeDrawer(false);
                 }
             }
@@ -427,10 +393,14 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
         actionBarLayout.init(mainFragmentsStack);
         actionBarLayout.setDelegate(this);
 
-        Theme.loadWallpaper();
+        ApplicationLoader.loadWallpaper();
 
         passcodeView = new PasscodeView(this);
-        drawerLayoutContainer.addView(passcodeView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        drawerLayoutContainer.addView(passcodeView);
+        FrameLayout.LayoutParams layoutParams1 = (FrameLayout.LayoutParams) passcodeView.getLayoutParams();
+        layoutParams1.width = LayoutHelper.MATCH_PARENT;
+        layoutParams1.height = LayoutHelper.MATCH_PARENT;
+        passcodeView.setLayoutParams(layoutParams1);
 
         NotificationCenter.getInstance().postNotificationName(NotificationCenter.closeOtherAppActivities, this);
         currentConnectionState = ConnectionsManager.getInstance().getConnectionState();
@@ -442,18 +412,13 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
         NotificationCenter.getInstance().addObserver(this, NotificationCenter.needShowAlert);
         NotificationCenter.getInstance().addObserver(this, NotificationCenter.wasUnableToFindCurrentLocation);
         NotificationCenter.getInstance().addObserver(this, NotificationCenter.didSetNewWallpapper);
-        NotificationCenter.getInstance().addObserver(this, NotificationCenter.didSetPasscode);
-        NotificationCenter.getInstance().addObserver(this, NotificationCenter.reloadInterface);
-        NotificationCenter.getInstance().addObserver(this, NotificationCenter.suggestedLangpack);
 
         if (actionBarLayout.fragmentsStack.isEmpty()) {
             if (!UserConfig.isClientActivated()) {
                 actionBarLayout.addFragmentToStack(new LoginActivity());
                 drawerLayoutContainer.setAllowOpenDrawer(false, false);
             } else {
-                DialogsActivity dialogsActivity = new DialogsActivity(null);
-                dialogsActivity.setSideMenu(sideMenu);
-                actionBarLayout.addFragmentToStack(dialogsActivity);
+                actionBarLayout.addFragmentToStack(new DialogsActivity(null));
                 drawerLayoutContainer.setAllowOpenDrawer(true, false);
             }
 
@@ -519,13 +484,9 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                     }
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
         } else {
-            BaseFragment fragment = actionBarLayout.fragmentsStack.get(0);
-            if (fragment instanceof DialogsActivity) {
-                ((DialogsActivity) fragment).setSideMenu(sideMenu);
-            }
             boolean allowOpen = true;
             if (AndroidUtilities.isTablet()) {
                 allowOpen = actionBarLayout.fragmentsStack.size() <= 1 && layersActionBarLayout.fragmentsStack.isEmpty();
@@ -567,30 +528,26 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                         }
                         if (height > AndroidUtilities.dp(100) && height < AndroidUtilities.displaySize.y && height + AndroidUtilities.dp(100) > AndroidUtilities.displaySize.y) {
                             AndroidUtilities.displaySize.y = height;
-                            FileLog.e("fix display size y to " + AndroidUtilities.displaySize.y);
+                            FileLog.e("tmessages", "fix display size y to " + AndroidUtilities.displaySize.y);
                         }
                     }
                 });
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
-        MediaController.getInstance().setBaseActivity(this, true);
+
     }
 
     private void checkLayout() {
-        if (!AndroidUtilities.isTablet() || rightActionBarLayout == null) {
+        if (!AndroidUtilities.isTablet()) {
             return;
         }
-
         if (!AndroidUtilities.isInMultiwindow && (!AndroidUtilities.isSmallTablet() || getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE)) {
             tabletFullSize = false;
             if (actionBarLayout.fragmentsStack.size() >= 2) {
                 for (int a = 1; a < actionBarLayout.fragmentsStack.size(); a++) {
                     BaseFragment chatFragment = actionBarLayout.fragmentsStack.get(a);
-                    if (chatFragment instanceof ChatActivity) {
-                        ((ChatActivity) chatFragment).setIgnoreAttachOnPause(true);
-                    }
                     chatFragment.onPause();
                     actionBarLayout.fragmentsStack.remove(a);
                     rightActionBarLayout.fragmentsStack.add(chatFragment);
@@ -609,9 +566,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
             if (!rightActionBarLayout.fragmentsStack.isEmpty()) {
                 for (int a = 0; a < rightActionBarLayout.fragmentsStack.size(); a++) {
                     BaseFragment chatFragment = rightActionBarLayout.fragmentsStack.get(a);
-                    if (chatFragment instanceof ChatActivity) {
-                        ((ChatActivity) chatFragment).setIgnoreAttachOnPause(true);
-                    }
                     chatFragment.onPause();
                     rightActionBarLayout.fragmentsStack.remove(a);
                     actionBarLayout.fragmentsStack.add(chatFragment);
@@ -632,12 +586,8 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
             return;
         }
         UserConfig.appLocked = true;
-        if (SecretMediaViewer.getInstance().isVisible()) {
-            SecretMediaViewer.getInstance().closePhoto(false, false);
-        } else if (PhotoViewer.getInstance().isVisible()) {
+        if (PhotoViewer.getInstance().isVisible()) {
             PhotoViewer.getInstance().closePhoto(false, true);
-        } else if (ArticleViewer.getInstance().isVisible()) {
-            ArticleViewer.getInstance().close(false, true);
         }
         passcodeView.onShow();
         UserConfig.isWaitingForPasscodeEnter = true;
@@ -666,9 +616,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
     }
 
     private boolean handleIntent(Intent intent, boolean isNew, boolean restore, boolean fromPassword) {
-        if (AndroidUtilities.handleProxyIntent(this, intent)) {
-            return true;
-        }
         int flags = intent.getFlags();
         if (!fromPassword && (AndroidUtilities.needShowPasscode(true) || UserConfig.isWaitingForPasscodeEnter)) {
             showPasscodeActivity();
@@ -682,9 +629,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
             Integer push_user_id = 0;
             Integer push_chat_id = 0;
             Integer push_enc_id = 0;
-            Integer push_msg_id = 0;
             Integer open_settings = 0;
-            Integer open_new_dialog = 0;
             long dialogId = intent != null && intent.getExtras() != null ? intent.getExtras().getLong("dialogId", 0) : 0;
             boolean showDialogsList = false;
             boolean showPlayer = false;
@@ -715,7 +660,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                     BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(stream, "UTF-8"));
                                     String line;
                                     while ((line = bufferedReader.readLine()) != null) {
-                                        FileLog.e(line);
+                                        FileLog.e("tmessages", line);
                                         String[] args = line.split(":");
                                         if (args.length != 2) {
                                             continue;
@@ -772,7 +717,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                         bufferedReader.close();
                                         stream.close();
                                     } catch (Exception e) {
-                                        FileLog.e(e);
+                                        FileLog.e("tmessages", e);
                                     }
                                     for (int a = 0; a < vcardDatas.size(); a++) {
                                         VcardData vcardData = vcardDatas.get(a);
@@ -796,7 +741,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                     error = true;
                                 }
                             } catch (Exception e) {
-                                FileLog.e(e);
+                                FileLog.e("tmessages", e);
                                 error = true;
                             }
                         } else {
@@ -910,8 +855,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                         if (!(parcelable instanceof Uri)) {
                                             parcelable = Uri.parse(parcelable.toString());
                                         }
-                                        Uri uri = (Uri) parcelable;
-                                        String path = AndroidUtilities.getPath(uri);
+                                        String path = AndroidUtilities.getPath((Uri) parcelable);
                                         String originalPath = parcelable.toString();
                                         if (originalPath == null) {
                                             originalPath = path;
@@ -926,12 +870,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                             }
                                             documentsPathsArray.add(path);
                                             documentsOriginalPathsArray.add(originalPath);
-                                        } else {
-                                            if (documentsUrisArray == null) {
-                                                documentsUrisArray = new ArrayList<>();
-                                            }
-                                            documentsUrisArray.add(uri);
-                                            documentsMimeType = type;
                                         }
                                     }
                                 }
@@ -939,7 +877,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                 error = true;
                             }
                         } catch (Exception e) {
-                            FileLog.e(e);
+                            FileLog.e("tmessages", e);
                             error = true;
                         }
                         if (error) {
@@ -951,7 +889,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                             String username = null;
                             String group = null;
                             String sticker = null;
-                            String instantView[] = null;
                             String botUser = null;
                             String botChat = null;
                             String message = null;
@@ -964,7 +901,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                             if (scheme != null) {
                                 if ((scheme.equals("http") || scheme.equals("https"))) {
                                     String host = data.getHost().toLowerCase();
-                                    if (host.equals("telegram.me") || host.equals("t.me") || host.equals("telegram.dog") || host.equals("telesco.pe")) {
+                                    if (host.equals("telegram.me") || host.equals("telegram.dog")) {
                                         String path = data.getPath();
                                         if (path != null && path.length() > 1) {
                                             path = path.substring(1);
@@ -972,12 +909,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                                 group = path.replace("joinchat/", "");
                                             } else if (path.startsWith("addstickers/")) {
                                                 sticker = path.replace("addstickers/", "");
-                                            } else if (path.startsWith("iv/")) {
-                                                instantView[0] = data.getQueryParameter("url");
-                                                instantView[1] = data.getQueryParameter("rhash");
-                                                if (TextUtils.isEmpty(instantView[0]) || TextUtils.isEmpty(instantView[1])) {
-                                                    instantView = null;
-                                                }
                                             } else if (path.startsWith("msg/") || path.startsWith("share/")) {
                                                 message = data.getQueryParameter("url");
                                                 if (message == null) {
@@ -1060,32 +991,8 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                     } else if (url.startsWith("tg:confirmphone") || url.startsWith("tg://confirmphone")) {
                                         phone = data.getQueryParameter("phone");
                                         phoneHash = data.getQueryParameter("hash");
-                                    } else if (url.startsWith("tg:openmessage") || url.startsWith("tg://openmessage")) {
-                                        String userID = data.getQueryParameter("user_id");
-                                        String chatID = data.getQueryParameter("chat_id");
-                                        String msgID = data.getQueryParameter("message_id");
-                                        if (userID != null) {
-                                            try {
-                                                push_user_id = Integer.parseInt(userID);
-                                            } catch (NumberFormatException ignore) {
-                                            }
-                                        } else if (chatID != null) {
-                                            try {
-                                                push_chat_id = Integer.parseInt(chatID);
-                                            } catch (NumberFormatException ignore) {
-                                            }
-                                        }
-                                        if (msgID != null) {
-                                            try {
-                                                push_msg_id = Integer.parseInt(msgID);
-                                            } catch (NumberFormatException ignore) {
-                                            }
-                                        }
                                     }
                                 }
-                            }
-                            if (message != null && message.startsWith("@")) {
-                                message = " " + message;
                             }
                             if (phone != null || phoneHash != null) {
                                 final Bundle args = new Bundle();
@@ -1097,8 +1004,8 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                         presentFragment(new CancelAccountDeletionActivity(args));
                                     }
                                 });
-                            } else if (username != null || group != null || sticker != null || message != null || game != null || instantView != null) {
-                                runLinkRequest(username, group, sticker, botUser, botChat, message, hasUrl, messageId, game, instantView, 0);
+                            } else if (username != null || group != null || sticker != null || message != null || game != null) {
+                                runLinkRequest(username, group, sticker, botUser, botChat, message, hasUrl, messageId, game, 0);
                             } else {
                                 try {
                                     Cursor cursor = getContentResolver().query(intent.getData(), null, null, null, null);
@@ -1111,14 +1018,12 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                         cursor.close();
                                     }
                                 } catch (Exception e) {
-                                    FileLog.e(e);
+                                    FileLog.e("tmessages", e);
                                 }
                             }
                         }
                     } else if (intent.getAction().equals("org.telegram.messenger.OPEN_ACCOUNT")) {
                         open_settings = 1;
-                    } else if (intent.getAction().equals("new_dialog")) {
-                        open_new_dialog = 1;
                     } else if (intent.getAction().startsWith("com.tmessages.openchat")) {
                         int chatId = intent.getIntExtra("chatId", 0);
                         int userId = intent.getIntExtra("userId", 0);
@@ -1144,8 +1049,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
             if (push_user_id != 0) {
                 Bundle args = new Bundle();
                 args.putInt("user_id", push_user_id);
-                if (push_msg_id != 0)
-                    args.putInt("message_id", push_msg_id);
                 if (mainFragmentsStack.isEmpty() || MessagesController.checkCanOpenChat(args, mainFragmentsStack.get(mainFragmentsStack.size() - 1))) {
                     ChatActivity fragment = new ChatActivity(args);
                     if (actionBarLayout.presentFragment(fragment, false, true, true)) {
@@ -1155,8 +1058,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
             } else if (push_chat_id != 0) {
                 Bundle args = new Bundle();
                 args.putInt("chat_id", push_chat_id);
-                if (push_msg_id != 0)
-                    args.putInt("message_id", push_msg_id);
                 if (mainFragmentsStack.isEmpty() || MessagesController.checkCanOpenChat(args, mainFragmentsStack.get(mainFragmentsStack.size() - 1))) {
                     ChatActivity fragment = new ChatActivity(args);
                     if (actionBarLayout.presentFragment(fragment, false, true, true)) {
@@ -1232,12 +1133,8 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                     }
                     actionBarLayout.presentFragment(fragment, removeLast, true, true);
                     pushOpened = true;
-                    if (SecretMediaViewer.getInstance().isVisible()) {
-                        SecretMediaViewer.getInstance().closePhoto(false, false);
-                    } else if (PhotoViewer.getInstance().isVisible()) {
+                    if (PhotoViewer.getInstance().isVisible()) {
                         PhotoViewer.getInstance().closePhoto(false, true);
-                    } else if (ArticleViewer.getInstance().isVisible()) {
-                        ArticleViewer.getInstance().close(false, true);
                     }
 
                     drawerLayoutContainer.setAllowOpenDrawer(false, false);
@@ -1260,18 +1157,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                     drawerLayoutContainer.setAllowOpenDrawer(true, false);
                 }
                 pushOpened = true;
-            } else if (open_new_dialog != 0) {
-                Bundle args = new Bundle();
-                args.putBoolean("destroyAfterSelect", true);
-                actionBarLayout.presentFragment(new ContactsActivity(args), false, true, true);
-                if (AndroidUtilities.isTablet()) {
-                    actionBarLayout.showLastFragment();
-                    rightActionBarLayout.showLastFragment();
-                    drawerLayoutContainer.setAllowOpenDrawer(false, false);
-                } else {
-                    drawerLayoutContainer.setAllowOpenDrawer(true, false);
-                }
-                pushOpened = true;
             }
 
             if (!pushOpened && !isNew) {
@@ -1283,9 +1168,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                         }
                     } else {
                         if (actionBarLayout.fragmentsStack.isEmpty()) {
-                            DialogsActivity dialogsActivity = new DialogsActivity(null);
-                            dialogsActivity.setSideMenu(sideMenu);
-                            actionBarLayout.addFragmentToStack(dialogsActivity);
+                            actionBarLayout.addFragmentToStack(new DialogsActivity(null));
                             drawerLayoutContainer.setAllowOpenDrawer(true, false);
                         }
                     }
@@ -1295,9 +1178,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                             actionBarLayout.addFragmentToStack(new LoginActivity());
                             drawerLayoutContainer.setAllowOpenDrawer(false, false);
                         } else {
-                            DialogsActivity dialogsActivity = new DialogsActivity(null);
-                            dialogsActivity.setSideMenu(sideMenu);
-                            actionBarLayout.addFragmentToStack(dialogsActivity);
+                            actionBarLayout.addFragmentToStack(new DialogsActivity(null));
                             drawerLayoutContainer.setAllowOpenDrawer(true, false);
                         }
                     }
@@ -1315,8 +1196,8 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
         return false;
     }
 
-    private void runLinkRequest(final String username, final String group, final String sticker, final String botUser, final String botChat, final String message, final boolean hasUrl, final Integer messageId, final String game, final String[] instantView, final int state) {
-        final AlertDialog progressDialog = new AlertDialog(this, 1);
+    private void runLinkRequest(final String username, final String group, final String sticker, final String botUser, final String botChat, final String message, final boolean hasUrl, final Integer messageId, final String game, final int state) {
+        final ProgressDialog progressDialog = new ProgressDialog(this);
         progressDialog.setMessage(LocaleController.getString("Loading", R.string.Loading));
         progressDialog.setCanceledOnTouchOutside(false);
         progressDialog.setCancelable(false);
@@ -1335,7 +1216,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                 try {
                                     progressDialog.dismiss();
                                 } catch (Exception e) {
-                                    FileLog.e(e);
+                                    FileLog.e("tmessages", e);
                                 }
                                 final TLRPC.TL_contacts_resolvedPeer res = (TLRPC.TL_contacts_resolvedPeer) response;
                                 if (error == null && actionBarLayout != null && (game == null || game != null && !res.users.isEmpty())) {
@@ -1389,12 +1270,8 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                             removeLast = actionBarLayout.fragmentsStack.size() > 1 && actionBarLayout.fragmentsStack.get(actionBarLayout.fragmentsStack.size() - 1) instanceof DialogsActivity;
                                         }
                                         actionBarLayout.presentFragment(fragment, removeLast, true, true);
-                                        if (SecretMediaViewer.getInstance().isVisible()) {
-                                            SecretMediaViewer.getInstance().closePhoto(false, false);
-                                        } else if (PhotoViewer.getInstance().isVisible()) {
+                                        if (PhotoViewer.getInstance().isVisible()) {
                                             PhotoViewer.getInstance().closePhoto(false, true);
-                                        } else if (ArticleViewer.getInstance().isVisible()) {
-                                            ArticleViewer.getInstance().close(false, true);
                                         }
                                         drawerLayoutContainer.setAllowOpenDrawer(false, false);
                                         if (AndroidUtilities.isTablet()) {
@@ -1409,7 +1286,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                             try {
                                                 Toast.makeText(LaunchActivity.this, LocaleController.getString("BotCantJoinGroups", R.string.BotCantJoinGroups), Toast.LENGTH_SHORT).show();
                                             } catch (Exception e) {
-                                                FileLog.e(e);
+                                                FileLog.e("tmessages", e);
                                             }
                                             return;
                                         }
@@ -1465,7 +1342,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                     try {
                                         Toast.makeText(LaunchActivity.this, LocaleController.getString("NoUsernameFound", R.string.NoUsernameFound), Toast.LENGTH_SHORT).show();
                                     } catch (Exception e) {
-                                        FileLog.e(e);
+                                        FileLog.e("tmessages", e);
                                     }
                                 }
                             }
@@ -1487,7 +1364,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                     try {
                                         progressDialog.dismiss();
                                     } catch (Exception e) {
-                                        FileLog.e(e);
+                                        FileLog.e("tmessages", e);
                                     }
                                     if (error == null && actionBarLayout != null) {
                                         TLRPC.ChatInvite invite = (TLRPC.ChatInvite) response;
@@ -1518,7 +1395,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                                 builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), new DialogInterface.OnClickListener() {
                                                     @Override
                                                     public void onClick(DialogInterface dialogInterface, int i) {
-                                                        runLinkRequest(username, group, sticker, botUser, botChat, message, hasUrl, messageId, game, instantView, 1);
+                                                        runLinkRequest(username, group, sticker, botUser, botChat, message, hasUrl, messageId, game, 1);
                                                     }
                                                 });
                                                 builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
@@ -1558,7 +1435,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                                     try {
                                         progressDialog.dismiss();
                                     } catch (Exception e) {
-                                        FileLog.e(e);
+                                        FileLog.e("tmessages", e);
                                     }
                                     if (error == null) {
                                         if (actionBarLayout != null) {
@@ -1638,8 +1515,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                 }
             });
             presentFragment(fragment, false, true);
-        } else if (instantView != null) {
-
         }
 
         if (requestId != 0) {
@@ -1651,7 +1526,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                     try {
                         dialog.dismiss();
                     } catch (Exception e) {
-                        FileLog.e(e);
+                        FileLog.e("tmessages", e);
                     }
                 }
             });
@@ -1666,7 +1541,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                 visibleDialog = null;
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
         try {
             visibleDialog = builder.show();
@@ -1674,21 +1549,12 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
             visibleDialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
                 @Override
                 public void onDismiss(DialogInterface dialog) {
-                    if (visibleDialog != null && visibleDialog == localeDialog) {
-                        try {
-                            String shorname = LocaleController.getInstance().getCurrentLocaleInfo().shortName;
-                            Toast.makeText(LaunchActivity.this, getStringForLanguageAlert(shorname.equals("en") ? englishLocaleStrings : systemLocaleStrings, "ChangeLanguageLater", R.string.ChangeLanguageLater), Toast.LENGTH_LONG).show();
-                        } catch (Exception e) {
-                            FileLog.e("tmessages", e);
-                        }
-                        localeDialog = null;
-                    }
                     visibleDialog = null;
                 }
             });
             return visibleDialog;
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
         return null;
     }
@@ -1702,8 +1568,8 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
     @Override
     public void didSelectDialog(DialogsActivity dialogsFragment, long dialog_id, boolean param) {
         if (dialog_id != 0) {
-            int lower_part = (int) dialog_id;
-            int high_id = (int) (dialog_id >> 32);
+            int lower_part = (int)dialog_id;
+            int high_id = (int)(dialog_id >> 32);
 
             Bundle args = new Bundle();
             args.putBoolean("scrollToTopOnResume", true);
@@ -1729,25 +1595,21 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
             ChatActivity fragment = new ChatActivity(args);
 
             if (videoPath != null) {
-                if (AndroidUtilities.isTablet()) {
-                    if (tabletFullSize) {
-                        actionBarLayout.presentFragment(fragment, false, true, false);
+                if(android.os.Build.VERSION.SDK_INT >= 16) {
+                    if (AndroidUtilities.isTablet()) {
+                        actionBarLayout.presentFragment(fragment, false, true, true);
                     } else {
-                        rightActionBarLayout.removeAllFragments();
-                        rightActionBarLayout.addFragmentToStack(fragment);
-                        rightActionBarLayout.setVisibility(View.VISIBLE);
-                        rightActionBarLayout.showLastFragment();
+                        actionBarLayout.addFragmentToStack(fragment, actionBarLayout.fragmentsStack.size() - 1);
+                    }
+
+                    if (!fragment.openVideoEditor(videoPath, dialogsFragment != null, false) && dialogsFragment != null) {
+                        if (!AndroidUtilities.isTablet()) {
+                            dialogsFragment.finishFragment(true);
+                        }
                     }
                 } else {
-                    actionBarLayout.addFragmentToStack(fragment, dialogsFragment != null ? actionBarLayout.fragmentsStack.size() - 1 : actionBarLayout.fragmentsStack.size());
-                }
-
-                if (!fragment.openVideoEditor(videoPath, dialogsFragment != null, false) && !AndroidUtilities.isTablet()) {
-                    if (dialogsFragment != null) {
-                        dialogsFragment.finishFragment(true);
-                    } else {
-                        actionBarLayout.showLastFragment();
-                    }
+                    actionBarLayout.presentFragment(fragment, dialogsFragment != null, dialogsFragment == null, true);
+                    SendMessagesHelper.prepareSendingVideo(videoPath, 0, 0, 0, 0, null, dialog_id, null, null);
                 }
             } else {
                 actionBarLayout.presentFragment(fragment, dialogsFragment != null, dialogsFragment == null, true);
@@ -1759,7 +1621,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                         captions.add(sendingText);
                         sendingText = null;
                     }
-                    SendMessagesHelper.prepareSendingPhotos(null, photoPathsArray, dialog_id, null, captions, null, null, false, null);
+                    SendMessagesHelper.prepareSendingPhotos(null, photoPathsArray, dialog_id, null, captions, null);
                 }
 
                 if (sendingText != null) {
@@ -1767,7 +1629,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                 }
 
                 if (documentsPathsArray != null || documentsUrisArray != null) {
-                    SendMessagesHelper.prepareSendingDocuments(documentsPathsArray, documentsOriginalPathsArray, documentsUrisArray, documentsMimeType, dialog_id, null, null);
+                    SendMessagesHelper.prepareSendingDocuments(documentsPathsArray, documentsOriginalPathsArray, documentsUrisArray, documentsMimeType, dialog_id, null);
                 }
                 if (contactsToSend != null && !contactsToSend.isEmpty()) {
                     for (TLRPC.User user : contactsToSend) {
@@ -1801,9 +1663,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
         NotificationCenter.getInstance().removeObserver(this, NotificationCenter.needShowAlert);
         NotificationCenter.getInstance().removeObserver(this, NotificationCenter.wasUnableToFindCurrentLocation);
         NotificationCenter.getInstance().removeObserver(this, NotificationCenter.didSetNewWallpapper);
-        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.didSetPasscode);
-        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.reloadInterface);
-        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.suggestedLangpack);
     }
 
     public void presentFragment(BaseFragment fragment) {
@@ -1814,18 +1673,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
         return actionBarLayout.presentFragment(fragment, removeLast, forceWithoutAnimation, true);
     }
 
-    public ActionBarLayout getActionBarLayout() {
-        return actionBarLayout;
-    }
-
-    public ActionBarLayout getLayersActionBarLayout() {
-        return layersActionBarLayout;
-    }
-
-    public ActionBarLayout getRightActionBarLayout() {
-        return rightActionBarLayout;
-    }
-
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (UserConfig.passcodeHash.length() != 0 && UserConfig.lastPauseTime != 0) {
@@ -1833,10 +1680,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
             UserConfig.saveConfig(false);
         }
         super.onActivityResult(requestCode, resultCode, data);
-        ThemeEditorView editorView = ThemeEditorView.getInstance();
-        if (editorView != null) {
-            editorView.onActivityResult(requestCode, resultCode, data);
-        }
         if (actionBarLayout.fragmentsStack.size() != 0) {
             BaseFragment fragment = actionBarLayout.fragmentsStack.get(actionBarLayout.fragmentsStack.size() - 1);
             fragment.onActivityResultFragment(requestCode, resultCode, data);
@@ -1866,7 +1709,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                     ContactsController.getInstance().readContacts();
                     return;
                 } else if (requestCode == 3) {
-                    CameraController.getInstance().initCamera();
                     return;
                 } else if (requestCode == 19 || requestCode == 20) {
                     showAlert = false;
@@ -1893,7 +1735,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                             intent.setData(Uri.parse("package:" + ApplicationLoader.applicationContext.getPackageName()));
                             startActivity(intent);
                         } catch (Exception e) {
-                            FileLog.e(e);
+                            FileLog.e("tmessages", e);
                         }
                     }
                 });
@@ -1925,15 +1767,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
     @Override
     protected void onPause() {
         super.onPause();
-        UserConfig.lastAppPauseTime = System.currentTimeMillis();
         ApplicationLoader.mainInterfacePaused = true;
-        Utilities.stageQueue.postRunnable(new Runnable() {
-            @Override
-            public void run() {
-                ApplicationLoader.mainInterfacePausedStageQueue = true;
-                ApplicationLoader.mainInterfacePausedStageQueueTime = 0;
-            }
-        });
         onPasscodePause();
         actionBarLayout.onPause();
         if (AndroidUtilities.isTablet()) {
@@ -1965,38 +1799,27 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
     @Override
     protected void onDestroy() {
         PhotoViewer.getInstance().destroyPhotoViewer();
-        SecretMediaViewer.getInstance().destroyPhotoViewer();
-        ArticleViewer.getInstance().destroyArticleViewer();
+        SecretPhotoViewer.getInstance().destroyPhotoViewer();
         StickerPreviewViewer.getInstance().destroy();
-        PipRoundVideoView pipRoundVideoView = PipRoundVideoView.getInstance();
-        MediaController.getInstance().setBaseActivity(this, false);
-        if (pipRoundVideoView != null) {
-            pipRoundVideoView.close(false);
-        }
-        Theme.destroyResources();
-        EmbedBottomSheet embedBottomSheet = EmbedBottomSheet.getInstance();
-        if (embedBottomSheet != null) {
-            embedBottomSheet.destroy();
-        }
-        ThemeEditorView editorView = ThemeEditorView.getInstance();
-        if (editorView != null) {
-            editorView.destroy();
-        }
         try {
             if (visibleDialog != null) {
                 visibleDialog.dismiss();
                 visibleDialog = null;
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
         try {
             if (onGlobalLayoutListener != null) {
                 final View view = getWindow().getDecorView().getRootView();
-                view.getViewTreeObserver().removeOnGlobalLayoutListener(onGlobalLayoutListener);
+                if (Build.VERSION.SDK_INT < 16) {
+                    view.getViewTreeObserver().removeGlobalOnLayoutListener(onGlobalLayoutListener);
+                } else {
+                    view.getViewTreeObserver().removeOnGlobalLayoutListener(onGlobalLayoutListener);
+                }
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
         super.onDestroy();
         onFinish();
@@ -2005,15 +1828,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
     @Override
     protected void onResume() {
         super.onResume();
-        showLanguageAlert(false);
         ApplicationLoader.mainInterfacePaused = false;
-        Utilities.stageQueue.postRunnable(new Runnable() {
-            @Override
-            public void run() {
-                ApplicationLoader.mainInterfacePausedStageQueue = false;
-                ApplicationLoader.mainInterfacePausedStageQueueTime = System.currentTimeMillis();
-            }
-        });
         onPasscodeResume();
         if (passcodeView.getVisibility() != View.VISIBLE) {
             actionBarLayout.onResume();
@@ -2036,13 +1851,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
         if (PhotoViewer.getInstance().isVisible()) {
             PhotoViewer.getInstance().onResume();
         }
-        PipRoundVideoView pipRoundVideoView = PipRoundVideoView.getInstance();
-        if (pipRoundVideoView != null && MediaController.getInstance().isMessagePaused()) {
-            MessageObject messageObject = MediaController.getInstance().getPlayingMessageObject();
-            if (messageObject != null) {
-                MediaController.getInstance().seekToProgress(messageObject, messageObject.audioProgress);
-            }
-        }
     }
 
     @Override
@@ -2050,18 +1858,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
         AndroidUtilities.checkDisplaySize(this, newConfig);
         super.onConfigurationChanged(newConfig);
         checkLayout();
-        PipRoundVideoView pipRoundVideoView = PipRoundVideoView.getInstance();
-        if (pipRoundVideoView != null) {
-            pipRoundVideoView.onConfigurationChanged();
-        }
-        EmbedBottomSheet embedBottomSheet = EmbedBottomSheet.getInstance();
-        if (embedBottomSheet != null) {
-            embedBottomSheet.onConfigurationChanged(newConfig);
-        }
-        ThemeEditorView editorView = ThemeEditorView.getInstance();
-        if (editorView != null) {
-            editorView.onConfigurationChanged();
-        }
     }
 
     @Override
@@ -2103,7 +1899,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
         } else if (id == NotificationCenter.didUpdatedConnectionState) {
             int state = ConnectionsManager.getInstance().getConnectionState();
             if (currentConnectionState != state) {
-                FileLog.d("switch to state " + state);
+                FileLog.d("tmessages", "switch to state " + state);
                 currentConnectionState = state;
                 updateCurrentConnectionState();
             }
@@ -2167,200 +1963,12 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                 mainFragmentsStack.get(mainFragmentsStack.size() - 1).showDialog(builder.create());
             }
         } else if (id == NotificationCenter.didSetNewWallpapper) {
-            if (sideMenu != null) {
-                View child = sideMenu.getChildAt(0);
+            if (listView != null) {
+                View child = listView.getChildAt(0);
                 if (child != null) {
                     child.invalidate();
                 }
             }
-        } else if (id == NotificationCenter.didSetPasscode) {
-            if (UserConfig.passcodeHash.length() > 0 && !UserConfig.allowScreenCapture) {
-                try {
-                    getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
-                } catch (Exception e) {
-                    FileLog.e(e);
-                }
-            } else {
-                try {
-                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
-                } catch (Exception e) {
-                    FileLog.e(e);
-                }
-            }
-        } else if (id == NotificationCenter.reloadInterface) {
-            rebuildAllFragments(true);
-        } else if (id == NotificationCenter.suggestedLangpack) {
-            showLanguageAlert(false);
-        }
-    }
-
-    private String getStringForLanguageAlert(HashMap<String, String> map, String key, int intKey) {
-        String value = map.get(key);
-        if (value == null) {
-            return LocaleController.getString(key, intKey);
-        }
-        return value;
-    }
-
-    private void showLanguageAlertInternal(LocaleController.LocaleInfo systemInfo, LocaleController.LocaleInfo englishInfo, String systemLang) {
-        try {
-            loadingLocaleDialog = false;
-            boolean firstSystem = systemInfo.builtIn || LocaleController.getInstance().isCurrentLocalLocale();
-            AlertDialog.Builder builder = new AlertDialog.Builder(LaunchActivity.this);
-            builder.setTitle(getStringForLanguageAlert(systemLocaleStrings, "ChooseYourLanguage", R.string.ChooseYourLanguage));
-            builder.setSubtitle(getStringForLanguageAlert(englishLocaleStrings, "ChooseYourLanguage", R.string.ChooseYourLanguage));
-            LinearLayout linearLayout = new LinearLayout(LaunchActivity.this);
-            linearLayout.setOrientation(LinearLayout.VERTICAL);
-            final LanguageCell[] cells = new LanguageCell[2];
-            final LocaleController.LocaleInfo[] selectedLanguage = new LocaleController.LocaleInfo[1];
-            final LocaleController.LocaleInfo[] locales = new LocaleController.LocaleInfo[2];
-            final String englishName = getStringForLanguageAlert(systemLocaleStrings, "English", R.string.English);
-            locales[0] = firstSystem ? systemInfo : englishInfo;
-            locales[1] = firstSystem ? englishInfo : systemInfo;
-            selectedLanguage[0] = firstSystem ? systemInfo : englishInfo;
-
-            for (int a = 0; a < 2; a++) {
-                cells[a] = new LanguageCell(LaunchActivity.this, true);
-                cells[a].setLanguage(locales[a], locales[a] == englishInfo ? englishName : null, true);
-                cells[a].setTag(a);
-                cells[a].setBackgroundDrawable(Theme.createSelectorDrawable(Theme.getColor(Theme.key_dialogButtonSelector), 2));
-                cells[a].setLanguageSelected(a == 0);
-                linearLayout.addView(cells[a], LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48));
-                cells[a].setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        Integer tag = (Integer) v.getTag();
-                        selectedLanguage[0] = ((LanguageCell) v).getCurrentLocale();
-                        for (int a = 0; a < cells.length; a++) {
-                            cells[a].setLanguageSelected(a == tag);
-                        }
-                    }
-                });
-            }
-            LanguageCell cell = new LanguageCell(LaunchActivity.this, true);
-            cell.setValue(getStringForLanguageAlert(systemLocaleStrings, "ChooseYourLanguageOther", R.string.ChooseYourLanguageOther), getStringForLanguageAlert(englishLocaleStrings, "ChooseYourLanguageOther", R.string.ChooseYourLanguageOther));
-            cell.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    localeDialog = null;
-                    drawerLayoutContainer.closeDrawer(true);
-                    presentFragment(new LanguageSelectActivity());
-                    if (visibleDialog != null) {
-                        visibleDialog.dismiss();
-                        visibleDialog = null;
-                    }
-                }
-            });
-            linearLayout.addView(cell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48));
-            builder.setView(linearLayout);
-            builder.setNegativeButton(LocaleController.getString("OK", R.string.OK), new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    LocaleController.getInstance().applyLanguage(selectedLanguage[0], true);
-                    rebuildAllFragments(true);
-                }
-            });
-            localeDialog = showAlertDialog(builder);
-            SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
-            preferences.edit().putString("language_showed2", systemLang).commit();
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
-    }
-
-    private void showLanguageAlert(boolean force) {
-        try {
-            if (loadingLocaleDialog) {
-                return;
-            }
-            SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
-            String showedLang = preferences.getString("language_showed2", "");
-            final String systemLang = LocaleController.getSystemLocaleStringIso639().toLowerCase();
-            if (!force && showedLang.equals(systemLang)) {
-                return;
-            }
-
-            final LocaleController.LocaleInfo infos[] = new LocaleController.LocaleInfo[2];
-            String arg = systemLang.contains("-") ? systemLang.split("-")[0] : systemLang;
-            for (int a = 0; a < LocaleController.getInstance().languages.size(); a++) {
-                LocaleController.LocaleInfo info = LocaleController.getInstance().languages.get(a);
-                if (info.shortName.equals("en")) {
-                    infos[0] = info;
-                }
-                if (info.shortName.replace("_", "-").equals(systemLang) || info.shortName.equals(arg)) {
-                    infos[1] = info;
-                }
-                if (infos[0] != null && infos[1] != null) {
-                    break;
-                }
-            }
-            if (infos[0] == null || infos[1] == null || infos[0] == infos[1]) {
-                return;
-            }
-
-            systemLocaleStrings = null;
-            englishLocaleStrings = null;
-            loadingLocaleDialog = true;
-
-            TLRPC.TL_langpack_getStrings req = new TLRPC.TL_langpack_getStrings();
-            req.lang_code = infos[1].shortName.replace("_", "-");
-            req.keys.add("English");
-            req.keys.add("ChooseYourLanguage");
-            req.keys.add("ChooseYourLanguageOther");
-            req.keys.add("ChangeLanguageLater");
-            ConnectionsManager.getInstance().sendRequest(req, new RequestDelegate() {
-                @Override
-                public void run(TLObject response, TLRPC.TL_error error) {
-                    final HashMap<String, String> keys = new HashMap<>();
-                    if (response != null) {
-                        TLRPC.Vector vector = (TLRPC.Vector) response;
-                        for (int a = 0; a < vector.objects.size(); a++) {
-                            final TLRPC.LangPackString string = (TLRPC.LangPackString) vector.objects.get(a);
-                            keys.put(string.key, string.value);
-                        }
-                    }
-                    AndroidUtilities.runOnUIThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            systemLocaleStrings = keys;
-                            if (englishLocaleStrings != null && systemLocaleStrings != null) {
-                                showLanguageAlertInternal(infos[1], infos[0], systemLang);
-                            }
-                        }
-                    });
-                }
-            }, ConnectionsManager.RequestFlagWithoutLogin);
-
-            req = new TLRPC.TL_langpack_getStrings();
-            req.lang_code = infos[0].shortName.replace("_", "-");
-            req.keys.add("English");
-            req.keys.add("ChooseYourLanguage");
-            req.keys.add("ChooseYourLanguageOther");
-            req.keys.add("ChangeLanguageLater");
-            ConnectionsManager.getInstance().sendRequest(req, new RequestDelegate() {
-                @Override
-                public void run(TLObject response, TLRPC.TL_error error) {
-                    final HashMap<String, String> keys = new HashMap<>();
-                    if (response != null) {
-                        TLRPC.Vector vector = (TLRPC.Vector) response;
-                        for (int a = 0; a < vector.objects.size(); a++) {
-                            final TLRPC.LangPackString string = (TLRPC.LangPackString) vector.objects.get(a);
-                            keys.put(string.key, string.value);
-                        }
-                    }
-                    AndroidUtilities.runOnUIThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            englishLocaleStrings = keys;
-                            if (englishLocaleStrings != null && systemLocaleStrings != null) {
-                                showLanguageAlertInternal(infos[1], infos[0], systemLang);
-                            }
-                        }
-                    });
-                }
-            }, ConnectionsManager.RequestFlagWithoutLogin);
-        } catch (Exception e) {
-            FileLog.e(e);
         }
     }
 
@@ -2376,10 +1984,10 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                 public void run() {
                     if (lockRunnable == this) {
                         if (AndroidUtilities.needShowPasscode(true)) {
-                            FileLog.e("lock app");
+                            FileLog.e("tmessages", "lock app");
                             showPasscodeActivity();
                         } else {
-                            FileLog.e("didn't pass lock check");
+                            FileLog.e("tmessages", "didn't pass lock check");
                         }
                         lockRunnable = null;
                     }
@@ -2411,60 +2019,15 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
     }
 
     private void updateCurrentConnectionState() {
-        String title = null;
-        String subtitle = null;
-        Runnable action = null;
+        String text = null;
         if (currentConnectionState == ConnectionsManager.ConnectionStateWaitingForNetwork) {
-            title = LocaleController.getString("WaitingForNetwork", R.string.WaitingForNetwork);
+            text = LocaleController.getString("WaitingForNetwork", R.string.WaitingForNetwork);
         } else if (currentConnectionState == ConnectionsManager.ConnectionStateConnecting) {
-            title = LocaleController.getString("Connecting", R.string.Connecting);
-            action = new Runnable() {
-                @Override
-                public void run() {
-                    if (AndroidUtilities.isTablet()) {
-                        if (!layerFragmentsStack.isEmpty() && layerFragmentsStack.get(layerFragmentsStack.size() - 1) instanceof ProxySettingsActivity) {
-                            return;
-                        }
-                    } else {
-                        if (!mainFragmentsStack.isEmpty() && mainFragmentsStack.get(mainFragmentsStack.size() - 1) instanceof ProxySettingsActivity) {
-                            return;
-                        }
-                    }
-                    presentFragment(new ProxySettingsActivity());
-                }
-            };
+            text = LocaleController.getString("Connecting", R.string.Connecting);
         } else if (currentConnectionState == ConnectionsManager.ConnectionStateUpdating) {
-            title = LocaleController.getString("Updating", R.string.Updating);
-        } else if (currentConnectionState == ConnectionsManager.ConnectionStateConnectingToProxy) {
-            title = LocaleController.getString("ConnectingToProxy", R.string.ConnectingToProxy);
-            subtitle = LocaleController.getString("ConnectingToProxyTapToDisable", R.string.ConnectingToProxyTapToDisable);
-            action = new Runnable() {
-                @Override
-                public void run() {
-                    if (actionBarLayout == null || actionBarLayout.fragmentsStack.isEmpty()) {
-                        return;
-                    }
-                    SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
-                    BaseFragment fragment = actionBarLayout.fragmentsStack.get(actionBarLayout.fragmentsStack.size() - 1);
-                    AlertDialog.Builder builder = new AlertDialog.Builder(LaunchActivity.this);
-                    builder.setTitle(LocaleController.getString("Proxy", R.string.Proxy));
-                    builder.setMessage(LocaleController.formatString("ConnectingToProxyDisableAlert", R.string.ConnectingToProxyDisableAlert, preferences.getString("proxy_ip", "")));
-                    builder.setPositiveButton(LocaleController.getString("ConnectingToProxyDisable", R.string.ConnectingToProxyDisable), new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            SharedPreferences.Editor editor = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).edit();
-                            editor.putBoolean("proxy_enabled", false);
-                            editor.commit();
-                            ConnectionsManager.native_setProxySettings("", 0, "", "");
-                            NotificationCenter.getInstance().postNotificationName(NotificationCenter.proxySettingsChanged);
-                        }
-                    });
-                    builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
-                    fragment.showDialog(builder.create());
-                }
-            };
+            text = LocaleController.getString("Updating", R.string.Updating);
         }
-        actionBarLayout.setTitleOverlayText(title, subtitle, action);
+        actionBarLayout.setTitleOverlayText(text);
     }
 
     @Override
@@ -2511,7 +2074,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                 lastFragment.saveSelfArgs(outState);
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
     }
 
@@ -2521,12 +2084,8 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
             finish();
             return;
         }
-        if (SecretMediaViewer.getInstance().isVisible()) {
-            SecretMediaViewer.getInstance().closePhoto(true, false);
-        } else if (PhotoViewer.getInstance().isVisible()) {
+        if (PhotoViewer.getInstance().isVisible()) {
             PhotoViewer.getInstance().closePhoto(true, false);
-        } else if (ArticleViewer.getInstance().isVisible()) {
-            ArticleViewer.getInstance().close(true, false);
         } else if (drawerLayoutContainer.isDrawerOpened()) {
             drawerLayoutContainer.closeDrawer(false);
         } else if (AndroidUtilities.isTablet()) {
@@ -2560,20 +2119,6 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
     @Override
     public void onActionModeStarted(ActionMode mode) {
         super.onActionModeStarted(mode);
-        try {
-            Menu menu = mode.getMenu();
-            if (menu != null) {
-                boolean extended = actionBarLayout.extendActionMode(menu);
-                if (!extended && AndroidUtilities.isTablet()) {
-                    extended = rightActionBarLayout.extendActionMode(menu);
-                    if (!extended) {
-                        layersActionBarLayout.extendActionMode(menu);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
         if (Build.VERSION.SDK_INT >= 23 && mode.getType() == ActionMode.TYPE_FLOATING) {
             return;
         }
@@ -2599,25 +2144,17 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
 
     @Override
     public boolean onPreIme() {
-        if (SecretMediaViewer.getInstance().isVisible()) {
-            SecretMediaViewer.getInstance().closePhoto(true, false);
-            return true;
-        } else if (PhotoViewer.getInstance().isVisible()) {
+        if (PhotoViewer.getInstance().isVisible()) {
             PhotoViewer.getInstance().closePhoto(true, false);
-            return true;
-        } else if (ArticleViewer.getInstance().isVisible()) {
-            ArticleViewer.getInstance().close(true, false);
             return true;
         }
         return false;
     }
 
     @Override
-    public boolean onKeyUp(int keyCode, KeyEvent event) {
+    public boolean onKeyUp(int keyCode, @NonNull KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_MENU && !UserConfig.isWaitingForPasscodeEnter) {
             if (PhotoViewer.getInstance().isVisible()) {
-                return super.onKeyUp(keyCode, event);
-            } else if (ArticleViewer.getInstance().isVisible()) {
                 return super.onKeyUp(keyCode, event);
             }
             if (AndroidUtilities.isTablet()) {
@@ -2648,13 +2185,10 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
 
     @Override
     public boolean needPresentFragment(BaseFragment fragment, boolean removeLast, boolean forceWithoutAnimation, ActionBarLayout layout) {
-        if (ArticleViewer.getInstance().isVisible()) {
-            ArticleViewer.getInstance().close(false, true);
-        }
         if (AndroidUtilities.isTablet()) {
             drawerLayoutContainer.setAllowOpenDrawer(!(fragment instanceof LoginActivity || fragment instanceof CountrySelectActivity) && layersActionBarLayout.getVisibility() != View.VISIBLE, true);
             if (fragment instanceof DialogsActivity) {
-                DialogsActivity dialogsActivity = (DialogsActivity) fragment;
+                DialogsActivity dialogsActivity = (DialogsActivity)fragment;
                 if (dialogsActivity.isMainDialogList() && layout != actionBarLayout) {
                     actionBarLayout.removeAllFragments();
                     actionBarLayout.presentFragment(fragment, removeLast, forceWithoutAnimation, false);
@@ -2726,7 +2260,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                     shadowTabletSide.setVisibility(View.GONE);
                     shadowTablet.setBackgroundColor(0x00000000);
                 } else {
-                    shadowTablet.setBackgroundColor(0x7f000000);
+                    shadowTablet.setBackgroundColor(0x7F000000);
                 }
                 layersActionBarLayout.presentFragment(fragment, removeLast, forceWithoutAnimation, false);
                 return false;
@@ -2743,7 +2277,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
         if (AndroidUtilities.isTablet()) {
             drawerLayoutContainer.setAllowOpenDrawer(!(fragment instanceof LoginActivity || fragment instanceof CountrySelectActivity) && layersActionBarLayout.getVisibility() != View.VISIBLE, true);
             if (fragment instanceof DialogsActivity) {
-                DialogsActivity dialogsActivity = (DialogsActivity) fragment;
+                DialogsActivity dialogsActivity = (DialogsActivity)fragment;
                 if (dialogsActivity.isMainDialogList() && layout != actionBarLayout) {
                     actionBarLayout.removeAllFragments();
                     actionBarLayout.addFragmentToStack(fragment);
@@ -2791,7 +2325,7 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                     shadowTabletSide.setVisibility(View.GONE);
                     shadowTablet.setBackgroundColor(0x00000000);
                 } else {
-                    shadowTablet.setBackgroundColor(0x7f000000);
+                    shadowTablet.setBackgroundColor(0x7F000000);
                 }
                 layersActionBarLayout.addFragmentToStack(fragment);
                 return false;
@@ -2825,27 +2359,18 @@ public class LaunchActivity extends Activity implements ActionBarLayout.ActionBa
                 finish();
                 return false;
             }
-            if (layout.fragmentsStack.size() >= 2 && !(layout.fragmentsStack.get(0) instanceof LoginActivity)) {
-                drawerLayoutContainer.setAllowOpenDrawer(true, false);
-            }
         }
         return true;
-    }
-
-    public void rebuildAllFragments(boolean last) {
-        if (layersActionBarLayout != null) {
-            layersActionBarLayout.rebuildAllFragmentViews(last, true);
-        } else {
-            actionBarLayout.rebuildAllFragmentViews(last, true);
-        }
     }
 
     @Override
     public void onRebuildAllFragments(ActionBarLayout layout) {
         if (AndroidUtilities.isTablet()) {
             if (layout == layersActionBarLayout) {
-                rightActionBarLayout.rebuildAllFragmentViews(true, true);
-                actionBarLayout.rebuildAllFragmentViews(true, true);
+                rightActionBarLayout.rebuildAllFragmentViews(true);
+                rightActionBarLayout.showLastFragment();
+                actionBarLayout.rebuildAllFragmentViews(true);
+                actionBarLayout.showLastFragment();
             }
         }
         drawerLayoutAdapter.notifyDataSetChanged();

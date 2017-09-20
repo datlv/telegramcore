@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -29,7 +29,7 @@ public class CloseProgressDrawable2 extends Drawable {
 
     public CloseProgressDrawable2() {
         super();
-        paint.setColor(0xffffffff);
+        paint.setColor(0xffadadad);
         paint.setStrokeWidth(AndroidUtilities.dp(2));
         paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStyle(Paint.Style.STROKE);
@@ -43,10 +43,6 @@ public class CloseProgressDrawable2 extends Drawable {
 
     public void stopAnimation() {
         animating = false;
-    }
-
-    public void setColor(int value) {
-        paint.setColor(value);
     }
 
     @Override
@@ -127,7 +123,7 @@ public class CloseProgressDrawable2 extends Drawable {
 
     @Override
     public void setColorFilter(ColorFilter cf) {
-        paint.setColorFilter(cf);
+
     }
 
     @Override

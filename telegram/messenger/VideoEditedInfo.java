@@ -3,12 +3,10 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
-
-import org.telegram.tgnet.TLRPC;
 
 import java.util.Locale;
 
@@ -22,14 +20,6 @@ public class VideoEditedInfo {
     public int resultHeight;
     public int bitrate;
     public String originalPath;
-    public long estimatedSize;
-    public long estimatedDuration;
-    public boolean roundVideo;
-    public boolean muted;
-    public TLRPC.InputFile file;
-    public TLRPC.InputEncryptedFile encryptedFile;
-    public byte[] key;
-    public byte[] iv;
 
     public String getString() {
         return String.format(Locale.US, "-1_%d_%d_%d_%d_%d_%d_%d_%d_%s", startTime, endTime, rotationValue, originalWidth, originalHeight, bitrate, resultWidth, resultHeight, originalPath);
@@ -60,12 +50,8 @@ public class VideoEditedInfo {
             }
             return true;
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
         return false;
-    }
-
-    public boolean needConvert() {
-        return !roundVideo || roundVideo && (startTime > 0 || endTime != -1 && endTime != estimatedDuration);
     }
 }

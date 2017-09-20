@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
@@ -49,8 +49,8 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
     @Override
     public void onCreate() {
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
-        NotificationCenter.getInstance().addObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
-        NotificationCenter.getInstance().addObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
+        NotificationCenter.getInstance().addObserver(this, NotificationCenter.audioProgressDidChanged);
+        NotificationCenter.getInstance().addObserver(this, NotificationCenter.audioPlayStateChanged);
         super.onCreate();
     }
 
@@ -82,7 +82,7 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
                     remoteControlClient.setTransportControlFlags(RemoteControlClient.FLAG_KEY_MEDIA_PLAY | RemoteControlClient.FLAG_KEY_MEDIA_PAUSE | RemoteControlClient.FLAG_KEY_MEDIA_PLAY_PAUSE |
                             RemoteControlClient.FLAG_KEY_MEDIA_STOP | RemoteControlClient.FLAG_KEY_MEDIA_PREVIOUS | RemoteControlClient.FLAG_KEY_MEDIA_NEXT);
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
             createNotification(messageObject);
@@ -159,7 +159,7 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
                 notification.bigContentView.setViewVisibility(R.id.player_progress_bar, View.GONE);
             }
 
-            if (MediaController.getInstance().isMessagePaused()) {
+            if (MediaController.getInstance().isAudioPaused()) {
                 notification.contentView.setViewVisibility(R.id.player_pause, View.GONE);
                 notification.contentView.setViewVisibility(R.id.player_play, View.VISIBLE);
                 if (supportBigNotifications) {
@@ -193,7 +193,7 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
                 try {
                     metadataEditor.putBitmap(RemoteControlClient.MetadataEditor.BITMAP_KEY_ARTWORK, audioInfo.getCover());
                 } catch (Throwable e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
             metadataEditor.apply();
@@ -223,13 +223,13 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
             metadataEditor.apply();
             audioManager.unregisterRemoteControlClient(remoteControlClient);
         }
-        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
-        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
+        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.audioProgressDidChanged);
+        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.audioPlayStateChanged);
     }
 
     @Override
     public void didReceivedNotification(int id, Object... args) {
-        if (id == NotificationCenter.messagePlayingPlayStateChanged) {
+        if (id == NotificationCenter.audioPlayStateChanged) {
             MessageObject messageObject = MediaController.getInstance().getPlayingMessageObject();
             if (messageObject != null) {
                 createNotification(messageObject);

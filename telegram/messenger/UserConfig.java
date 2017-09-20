@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
@@ -16,8 +16,6 @@ import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLRPC;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Map;
 
 public class UserConfig {
 
@@ -36,18 +34,13 @@ public class UserConfig {
     public static boolean appLocked;
     public static int passcodeType;
     public static int autoLockIn = 60 * 60;
-    public static boolean allowScreenCapture;
     public static int lastPauseTime;
-    public static long lastAppPauseTime;
     public static boolean isWaitingForPasscodeEnter;
     public static boolean useFingerprint = true;
     public static String lastUpdateVersion;
     public static int lastContactsSyncTime;
     public static int lastHintsSyncTime;
     public static boolean draftsLoaded;
-    public static boolean notificationsConverted = true;
-    public static boolean pinnedDialogsLoaded = true;
-    public static TLRPC.TL_account_tmpPassword tmpPassword;
 
     public static int migrateOffsetId = -1;
     public static int migrateOffsetDate = -1;
@@ -55,14 +48,6 @@ public class UserConfig {
     public static int migrateOffsetChatId = -1;
     public static int migrateOffsetChannelId = -1;
     public static long migrateOffsetAccess = -1;
-
-    public static int totalDialogsLoadCount = 0;
-    public static int dialogsLoadOffsetId = 0;
-    public static int dialogsLoadOffsetDate = 0;
-    public static int dialogsLoadOffsetUserId = 0;
-    public static int dialogsLoadOffsetChatId = 0;
-    public static int dialogsLoadOffsetChannelId = 0;
-    public static long dialogsLoadOffsetAccess = 0;
 
     public static int getNewMessageId() {
         int id;
@@ -96,50 +81,27 @@ public class UserConfig {
                 editor.putInt("passcodeType", passcodeType);
                 editor.putInt("autoLockIn", autoLockIn);
                 editor.putInt("lastPauseTime", lastPauseTime);
-                editor.putLong("lastAppPauseTime", lastAppPauseTime);
                 editor.putString("lastUpdateVersion2", lastUpdateVersion);
                 editor.putInt("lastContactsSyncTime", lastContactsSyncTime);
                 editor.putBoolean("useFingerprint", useFingerprint);
                 editor.putInt("lastHintsSyncTime", lastHintsSyncTime);
                 editor.putBoolean("draftsLoaded", draftsLoaded);
-                editor.putBoolean("notificationsConverted", notificationsConverted);
-                editor.putBoolean("allowScreenCapture", allowScreenCapture);
-                editor.putBoolean("pinnedDialogsLoaded", pinnedDialogsLoaded);
 
-                editor.putInt("3migrateOffsetId", migrateOffsetId);
+                editor.putInt("migrateOffsetId", migrateOffsetId);
                 if (migrateOffsetId != -1) {
-                    editor.putInt("3migrateOffsetDate", migrateOffsetDate);
-                    editor.putInt("3migrateOffsetUserId", migrateOffsetUserId);
-                    editor.putInt("3migrateOffsetChatId", migrateOffsetChatId);
-                    editor.putInt("3migrateOffsetChannelId", migrateOffsetChannelId);
-                    editor.putLong("3migrateOffsetAccess", migrateOffsetAccess);
-                }
-
-
-                editor.putInt("2totalDialogsLoadCount", totalDialogsLoadCount);
-                editor.putInt("2dialogsLoadOffsetId", dialogsLoadOffsetId);
-                editor.putInt("2dialogsLoadOffsetDate", dialogsLoadOffsetDate);
-                editor.putInt("2dialogsLoadOffsetUserId", dialogsLoadOffsetUserId);
-                editor.putInt("2dialogsLoadOffsetChatId", dialogsLoadOffsetChatId);
-                editor.putInt("2dialogsLoadOffsetChannelId", dialogsLoadOffsetChannelId);
-                editor.putLong("2dialogsLoadOffsetAccess", dialogsLoadOffsetAccess);
-
-                if (tmpPassword != null) {
-                    SerializedData data = new SerializedData();
-                    tmpPassword.serializeToStream(data);
-                    String string = Base64.encodeToString(data.toByteArray(), Base64.DEFAULT);
-                    editor.putString("tmpPassword", string);
-                    data.cleanup();
-                } else {
-                    editor.remove("tmpPassword");
+                    editor.putInt("migrateOffsetDate", migrateOffsetDate);
+                    editor.putInt("migrateOffsetUserId", migrateOffsetUserId);
+                    editor.putInt("migrateOffsetChatId", migrateOffsetChatId);
+                    editor.putInt("migrateOffsetChannelId", migrateOffsetChannelId);
+                    editor.putLong("migrateOffsetAccess", migrateOffsetAccess);
                 }
 
                 if (currentUser != null) {
                     if (withFile) {
                         SerializedData data = new SerializedData();
                         currentUser.serializeToStream(data);
-                        String string = Base64.encodeToString(data.toByteArray(), Base64.DEFAULT);
-                        editor.putString("user", string);
+                        String userString = Base64.encodeToString(data.toByteArray(), Base64.DEFAULT);
+                        editor.putString("user", userString);
                         data.cleanup();
                     }
                 } else {
@@ -151,7 +113,7 @@ public class UserConfig {
                     oldFile.delete();
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
         }
     }
@@ -239,7 +201,7 @@ public class UserConfig {
                         }
                     });
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             } else {
                 SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("userconfing", Context.MODE_PRIVATE);
@@ -256,66 +218,26 @@ public class UserConfig {
                 passcodeType = preferences.getInt("passcodeType", 0);
                 autoLockIn = preferences.getInt("autoLockIn", 60 * 60);
                 lastPauseTime = preferences.getInt("lastPauseTime", 0);
-                lastAppPauseTime = preferences.getLong("lastAppPauseTime", 0);
                 useFingerprint = preferences.getBoolean("useFingerprint", true);
                 lastUpdateVersion = preferences.getString("lastUpdateVersion2", "3.5");
                 lastContactsSyncTime = preferences.getInt("lastContactsSyncTime", (int) (System.currentTimeMillis() / 1000) - 23 * 60 * 60);
                 lastHintsSyncTime = preferences.getInt("lastHintsSyncTime", (int) (System.currentTimeMillis() / 1000) - 25 * 60 * 60);
                 draftsLoaded = preferences.getBoolean("draftsLoaded", false);
-                notificationsConverted = preferences.getBoolean("notificationsConverted", false);
-                allowScreenCapture = preferences.getBoolean("allowScreenCapture", false);
-                pinnedDialogsLoaded = preferences.getBoolean("pinnedDialogsLoaded", false);
 
-                if (UserConfig.passcodeHash.length() > 0 && lastPauseTime == 0) {
-                    lastPauseTime = (int) (System.currentTimeMillis() / 1000 - 60 * 10);
-                }
-
-                migrateOffsetId = preferences.getInt("3migrateOffsetId", 0);
+                migrateOffsetId = preferences.getInt("migrateOffsetId", 0);
                 if (migrateOffsetId != -1) {
-                    migrateOffsetDate = preferences.getInt("3migrateOffsetDate", 0);
-                    migrateOffsetUserId = preferences.getInt("3migrateOffsetUserId", 0);
-                    migrateOffsetChatId = preferences.getInt("3migrateOffsetChatId", 0);
-                    migrateOffsetChannelId = preferences.getInt("3migrateOffsetChannelId", 0);
-                    migrateOffsetAccess = preferences.getLong("3migrateOffsetAccess", 0);
-                }
-//                migrateOffsetId = 0;
-//                migrateOffsetDate = 0;
-//                migrateOffsetUserId = 0;
-//                migrateOffsetChatId = 0;
-//                migrateOffsetChannelId = 0;
-//                migrateOffsetAccess = 0;
-
-                dialogsLoadOffsetId = preferences.getInt("2dialogsLoadOffsetId", -1);
-                totalDialogsLoadCount = preferences.getInt("2totalDialogsLoadCount", 0);
-                dialogsLoadOffsetDate = preferences.getInt("2dialogsLoadOffsetDate", -1);
-                dialogsLoadOffsetUserId = preferences.getInt("2dialogsLoadOffsetUserId", -1);
-                dialogsLoadOffsetChatId = preferences.getInt("2dialogsLoadOffsetChatId", -1);
-                dialogsLoadOffsetChannelId = preferences.getInt("2dialogsLoadOffsetChannelId", -1);
-                dialogsLoadOffsetAccess = preferences.getLong("2dialogsLoadOffsetAccess", -1);
-
-//                dialogsLoadOffsetId = -1;
-//                totalDialogsLoadCount = 0;
-//                dialogsLoadOffsetDate = -1;
-//                dialogsLoadOffsetUserId = -1;
-//                dialogsLoadOffsetChatId = -1;
-//                dialogsLoadOffsetChannelId = -1;
-//                dialogsLoadOffsetAccess = -1;
-
-                String string = preferences.getString("tmpPassword", null);
-                if (string != null) {
-                    byte[] bytes = Base64.decode(string, Base64.DEFAULT);
-                    if (bytes != null) {
-                        SerializedData data = new SerializedData(bytes);
-                        tmpPassword = TLRPC.TL_account_tmpPassword.TLdeserialize(data, data.readInt32(false), false);
-                        data.cleanup();
-                    }
+                    migrateOffsetDate = preferences.getInt("migrateOffsetDate", 0);
+                    migrateOffsetUserId = preferences.getInt("migrateOffsetUserId", 0);
+                    migrateOffsetChatId = preferences.getInt("migrateOffsetChatId", 0);
+                    migrateOffsetChannelId = preferences.getInt("migrateOffsetChannelId", 0);
+                    migrateOffsetAccess = preferences.getLong("migrateOffsetAccess", 0);
                 }
 
-                string = preferences.getString("user", null);
-                if (string != null) {
-                    byte[] bytes = Base64.decode(string, Base64.DEFAULT);
-                    if (bytes != null) {
-                        SerializedData data = new SerializedData(bytes);
+                String user = preferences.getString("user", null);
+                if (user != null) {
+                    byte[] userBytes = Base64.decode(user, Base64.DEFAULT);
+                    if (userBytes != null) {
+                        SerializedData data = new SerializedData(userBytes);
                         currentUser = TLRPC.User.TLdeserialize(data, data.readInt32(false), false);
                         data.cleanup();
                     }
@@ -325,83 +247,6 @@ public class UserConfig {
                     passcodeSalt = Base64.decode(passcodeSaltString, Base64.DEFAULT);
                 } else {
                     passcodeSalt = new byte[0];
-                }
-
-                if (!notificationsConverted) {
-                    try {
-                        ArrayList<Long> customDialogs = new ArrayList<>();
-                        preferences = ApplicationLoader.applicationContext.getSharedPreferences("Notifications", Context.MODE_PRIVATE);
-                        Map<String, ?> all = preferences.getAll();
-                        String defaultSound = LocaleController.getString("SoundDefault", R.string.SoundDefault);
-                        int defaultVibrate = 0;
-                        int defaultPriority = 0;
-                        int defaultColor = 0;
-                        int defaultMaxCount = 2;
-                        int defaultMaxDelay = 3 * 60;
-                        for (Map.Entry<String, ?> entry : all.entrySet()) {
-                            String key = entry.getKey();
-                            if (key.startsWith("sound_")) {
-                                String value = (String) entry.getValue();
-                                if (!value.equals(defaultSound)) {
-                                    long dialogId = Utilities.parseLong(key);
-                                    if (!customDialogs.contains(dialogId)) {
-                                        customDialogs.add(dialogId);
-                                    }
-                                }
-                            } else if (key.startsWith("vibrate_")) {
-                                Integer value = (Integer) entry.getValue();
-                                if (value != defaultVibrate) {
-                                    long dialogId = Utilities.parseLong(key);
-                                    if (!customDialogs.contains(dialogId)) {
-                                        customDialogs.add(dialogId);
-                                    }
-                                }
-                            } else if (key.startsWith("priority_")) {
-                                Integer value = (Integer) entry.getValue();
-                                if (value != defaultPriority) {
-                                    long dialogId = Utilities.parseLong(key);
-                                    if (!customDialogs.contains(dialogId)) {
-                                        customDialogs.add(dialogId);
-                                    }
-                                }
-                            } else if (key.startsWith("color_")) {
-                                Integer value = (Integer) entry.getValue();
-                                if (value != defaultColor) {
-                                    long dialogId = Utilities.parseLong(key);
-                                    if (!customDialogs.contains(dialogId)) {
-                                        customDialogs.add(dialogId);
-                                    }
-                                }
-                            } else if (key.startsWith("smart_max_count_")) {
-                                Integer value = (Integer) entry.getValue();
-                                if (value != defaultMaxCount) {
-                                    long dialogId = Utilities.parseLong(key);
-                                    if (!customDialogs.contains(dialogId)) {
-                                        customDialogs.add(dialogId);
-                                    }
-                                }
-                            } else if (key.startsWith("smart_delay_")) {
-                                Integer value = (Integer) entry.getValue();
-                                if (value != defaultMaxDelay) {
-                                    long dialogId = Utilities.parseLong(key);
-                                    if (!customDialogs.contains(dialogId)) {
-                                        customDialogs.add(dialogId);
-                                    }
-                                }
-                            }
-                        }
-                        if (!customDialogs.isEmpty()) {
-                            SharedPreferences.Editor editor = preferences.edit();
-                            for (int a = 0; a < customDialogs.size(); a++) {
-                                editor.putBoolean("custom_" + customDialogs.get(a), true);
-                            }
-                            editor.commit();
-                        }
-                    } catch (Exception e) {
-                        FileLog.e(e);
-                    }
-                    notificationsConverted = true;
-                    saveConfig(false);
                 }
             }
         }
@@ -422,7 +267,7 @@ public class UserConfig {
                     passcodeHash = Utilities.bytesToHex(Utilities.computeSHA256(bytes, 0, bytes.length));
                     saveConfig(false);
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
             return result;
@@ -436,7 +281,7 @@ public class UserConfig {
                 String hash = Utilities.bytesToHex(Utilities.computeSHA256(bytes, 0, bytes.length));
                 return passcodeHash.equals(hash);
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
         }
         return false;
@@ -456,13 +301,6 @@ public class UserConfig {
         migrateOffsetChatId = -1;
         migrateOffsetChannelId = -1;
         migrateOffsetAccess = -1;
-        dialogsLoadOffsetId = 0;
-        totalDialogsLoadCount = 0;
-        dialogsLoadOffsetDate = 0;
-        dialogsLoadOffsetUserId = 0;
-        dialogsLoadOffsetChatId = 0;
-        dialogsLoadOffsetChannelId = 0;
-        dialogsLoadOffsetAccess = 0;
         appLocked = false;
         passcodeType = 0;
         passcodeHash = "";
@@ -471,10 +309,7 @@ public class UserConfig {
         lastPauseTime = 0;
         useFingerprint = true;
         draftsLoaded = true;
-        notificationsConverted = true;
         isWaitingForPasscodeEnter = false;
-        allowScreenCapture = false;
-        pinnedDialogsLoaded = false;
         lastUpdateVersion = BuildVars.BUILD_VERSION_STRING;
         lastContactsSyncTime = (int) (System.currentTimeMillis() / 1000) - 23 * 60 * 60;
         lastHintsSyncTime = (int) (System.currentTimeMillis() / 1000) - 25 * 60 * 60;

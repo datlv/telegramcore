@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
@@ -34,7 +34,7 @@ public class VideoEncodingService extends Service implements NotificationCenter.
         stopForeground(true);
         NotificationCenter.getInstance().removeObserver(this, NotificationCenter.FileUploadProgressChanged);
         NotificationCenter.getInstance().removeObserver(this, NotificationCenter.stopEncodingService);
-        FileLog.e("destroy video service");
+        FileLog.e("tmessages", "destroy video service");
     }
 
     @Override
@@ -46,11 +46,7 @@ public class VideoEncodingService extends Service implements NotificationCenter.
                 Boolean enc = (Boolean) args[2];
                 currentProgress = (int)(progress * 100);
                 builder.setProgress(100, currentProgress, currentProgress == 0);
-                try {
-                    NotificationManagerCompat.from(ApplicationLoader.applicationContext).notify(4, builder.build());
-                } catch (Throwable e) {
-                    FileLog.e(e);
-                }
+                NotificationManagerCompat.from(ApplicationLoader.applicationContext).notify(4, builder.build());
             }
         } else if (id == NotificationCenter.stopEncodingService) {
             String filepath = (String)args[0];
@@ -67,7 +63,7 @@ public class VideoEncodingService extends Service implements NotificationCenter.
             stopSelf();
             return Service.START_NOT_STICKY;
         }
-        FileLog.e("start video service");
+        FileLog.e("tmessages", "start video service");
         if (builder == null) {
             builder = new NotificationCompat.Builder(ApplicationLoader.applicationContext);
             builder.setSmallIcon(android.R.drawable.stat_sys_upload);

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger.camera;
@@ -39,10 +39,6 @@ public class CameraInfo {
 
     public ArrayList<Size> getPictureSizes() {
         return pictureSizes;
-    }
-
-    public boolean isFrontface() {
-        return frontCamera != 0;
     }
 
     /*private int getScore(CameraSelectionCriteria criteria) {

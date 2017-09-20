@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -29,14 +29,14 @@ public class PhotoEditorSeekBar extends View {
     private PhotoEditorSeekBarDelegate delegate;
 
     public interface PhotoEditorSeekBarDelegate {
-        void onProgressChanged(int i, int progress);
+        void onProgressChanged();
     }
 
     public PhotoEditorSeekBar(Context context) {
         super(context);
 
-        innerPaint.setColor(0xff4d4d4d);
-        outerPaint.setColor(0xffffffff);
+        innerPaint.setColor(0x99383838);
+        outerPaint.setColor(0xff53aeef);
     }
 
     public void setDelegate(PhotoEditorSeekBarDelegate delegate) {
@@ -76,7 +76,7 @@ public class PhotoEditorSeekBar extends View {
                 }
                 progress = thumbX / (getMeasuredWidth() - thumbSize);
                 if (delegate != null) {
-                    delegate.onProgressChanged((Integer) getTag(), getProgress());
+                    delegate.onProgressChanged();
                 }
                 invalidate();
                 return true;
@@ -98,7 +98,7 @@ public class PhotoEditorSeekBar extends View {
         this.progress = (progress - minValue) / (float) (maxValue - minValue);
         invalidate();
         if (notify && delegate != null) {
-            delegate.onProgressChanged((Integer) getTag(), getProgress());
+            delegate.onProgressChanged();
         }
     }
 

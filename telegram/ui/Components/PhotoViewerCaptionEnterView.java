@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -22,7 +22,6 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
@@ -38,7 +37,6 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.ui.ActionBar.Theme;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -71,8 +69,6 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
     private int keyboardHeightLand;
     private boolean keyboardVisible;
     private int emojiPadding;
-
-    private boolean forceFloatingEmoji;
 
     private boolean innerTextChange;
 
@@ -121,7 +117,7 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
                     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
                 } catch (Exception e) {
                     setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), AndroidUtilities.dp(51));
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
         };
@@ -260,24 +256,6 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
                 }
             }
         });
-
-        ImageView doneButton = new ImageView(context);
-        doneButton.setScaleType(ImageView.ScaleType.CENTER);
-        doneButton.setImageResource(R.drawable.ic_done);
-        textFieldContainer.addView(doneButton, LayoutHelper.createLinear(48, 48, Gravity.BOTTOM));
-        if (Build.VERSION.SDK_INT >= 21) {
-            doneButton.setBackgroundDrawable(Theme.createSelectorDrawable(Theme.ACTION_BAR_WHITE_SELECTOR_COLOR));
-        }
-        doneButton.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                delegate.onCaptionEnter();
-            }
-        });
-    }
-
-    public void setForceFloatingEmoji(boolean value) {
-        forceFloatingEmoji = value;
     }
 
     public boolean hideActionMode() {
@@ -285,7 +263,7 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
             try {
                 currentActionMode.finish();
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
             currentActionMode = null;
             return true;
@@ -321,7 +299,7 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
                 method.invoke(mode);
             }
         } catch (Throwable e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
     }
 
@@ -385,7 +363,7 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
                 messageEditText.setSelection(messageEditText.length());
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
     }
 
@@ -402,7 +380,7 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
                             try {
                                 messageEditText.requestFocus();
                             } catch (Exception e) {
-                                FileLog.e(e);
+                                FileLog.e("tmessages", e);
                             }
                         }
                     }
@@ -455,7 +433,7 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
                             int j = i + localCharSequence.length();
                             messageEditText.setSelection(j, j);
                         } catch (Exception e) {
-                            FileLog.e(e);
+                            FileLog.e("tmessages", e);
                         } finally {
                             innerTextChange = false;
                         }
@@ -491,7 +469,7 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
                     }
 
                     @Override
-                    public void onShowStickerSet(TLRPC.StickerSet stickerSet, TLRPC.InputStickerSet inputStickerSet) {
+                    public void onShowStickerSet(TLRPC.StickerSetCovered stickerSet) {
 
                     }
 
@@ -522,7 +500,7 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
             layoutParams.width = AndroidUtilities.displaySize.x;
             layoutParams.height = currentHeight;
             emojiView.setLayoutParams(layoutParams);
-            if (!AndroidUtilities.isInMultiwindow && !forceFloatingEmoji) {
+            if (!AndroidUtilities.isInMultiwindow) {
                 AndroidUtilities.hideKeyboard(messageEditText);
             }
             if (sizeNotifierLayout != null) {
@@ -556,29 +534,12 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
 
     private void openKeyboardInternal() {
         showPopup(AndroidUtilities.usingHardwareInput ? 0 : 2);
-        openKeyboard();
+        AndroidUtilities.showKeyboard(messageEditText);
     }
 
     public void openKeyboard() {
-        int currentSelection;
-        try {
-            currentSelection = messageEditText.getSelectionStart();
-        } catch (Exception e) {
-            currentSelection = messageEditText.length();
-            FileLog.e(e);
-        }
-        MotionEvent event = MotionEvent.obtain(0, 0, MotionEvent.ACTION_DOWN, 0, 0, 0);
-        messageEditText.onTouchEvent(event);
-        event.recycle();
-        event = MotionEvent.obtain(0, 0, MotionEvent.ACTION_UP, 0, 0, 0);
-        messageEditText.onTouchEvent(event);
-        event.recycle();
+        messageEditText.requestFocus();
         AndroidUtilities.showKeyboard(messageEditText);
-        try {
-            messageEditText.setSelection(currentSelection);
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
     }
 
     public boolean isPopupShowing() {
@@ -590,12 +551,12 @@ public class PhotoViewerCaptionEnterView extends FrameLayout implements Notifica
     }
 
     public boolean isKeyboardVisible() {
-        return AndroidUtilities.usingHardwareInput && getTag() != null || keyboardVisible;
+        return AndroidUtilities.usingHardwareInput && getLayoutParams() != null && ((FrameLayout.LayoutParams) getLayoutParams()).bottomMargin == 0 || keyboardVisible;
     }
 
     @Override
     public void onSizeChanged(int height, boolean isWidthGreater) {
-        if (height > AndroidUtilities.dp(50) && keyboardVisible && !AndroidUtilities.isInMultiwindow && !forceFloatingEmoji) {
+        if (height > AndroidUtilities.dp(50) && keyboardVisible && !AndroidUtilities.isInMultiwindow) {
             if (isWidthGreater) {
                 keyboardHeightLand = height;
                 ApplicationLoader.applicationContext.getSharedPreferences("emoji", 0).edit().putInt("kbd_height_land3", keyboardHeightLand).commit();

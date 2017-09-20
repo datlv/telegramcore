@@ -26,15 +26,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 class MessageThreadUtil<T> implements ThreadUtil<T> {
 
-    @Override
     public MainThreadCallback<T> getMainThreadProxy(final MainThreadCallback<T> callback) {
         return new MainThreadCallback<T>() {
-            final MessageQueue mQueue = new MessageQueue();
+            final private MessageQueue mQueue = new MessageQueue();
             final private Handler mMainThreadHandler = new Handler(Looper.getMainLooper());
 
-            static final int UPDATE_ITEM_COUNT = 1;
-            static final int ADD_TILE = 2;
-            static final int REMOVE_TILE = 3;
+            private static final int UPDATE_ITEM_COUNT = 1;
+            private static final int ADD_TILE = 2;
+            private static final int REMOVE_TILE = 3;
 
             @Override
             public void updateItemCount(int generation, int itemCount) {
@@ -82,17 +81,16 @@ class MessageThreadUtil<T> implements ThreadUtil<T> {
         };
     }
 
-    @Override
     public BackgroundCallback<T> getBackgroundProxy(final BackgroundCallback<T> callback) {
         return new BackgroundCallback<T>() {
-            final MessageQueue mQueue = new MessageQueue();
+            final private MessageQueue mQueue = new MessageQueue();
             final private Executor mExecutor = ParallelExecutorCompat.getParallelExecutor();
             AtomicBoolean mBackgroundRunning = new AtomicBoolean(false);
 
-            static final int REFRESH = 1;
-            static final int UPDATE_RANGE = 2;
-            static final int LOAD_TILE = 3;
-            static final int RECYCLE_TILE = 4;
+            private static final int REFRESH = 1;
+            private static final int UPDATE_RANGE = 2;
+            private static final int LOAD_TILE = 3;
+            private static final int RECYCLE_TILE = 4;
 
             @Override
             public void refresh(int generation) {

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
@@ -24,7 +24,7 @@ public class DispatchQueue extends Thread {
         start();
     }
 
-    public void sendMessage(Message msg, int delay) {
+    private void sendMessage(Message msg, int delay) {
         try {
             syncLatch.await();
             if (delay <= 0) {
@@ -33,7 +33,7 @@ public class DispatchQueue extends Thread {
                 handler.sendMessageDelayed(msg, delay);
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
     }
 
@@ -42,7 +42,7 @@ public class DispatchQueue extends Thread {
             syncLatch.await();
             handler.removeCallbacks(runnable);
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
     }
 
@@ -59,7 +59,7 @@ public class DispatchQueue extends Thread {
                 handler.postDelayed(runnable, delay);
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
     }
 
@@ -68,23 +68,14 @@ public class DispatchQueue extends Thread {
             syncLatch.await();
             handler.removeCallbacksAndMessages(null);
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
-    }
-
-    public void handleMessage(Message inputMessage) {
-
     }
 
     @Override
     public void run() {
         Looper.prepare();
-        handler = new Handler() {
-            @Override
-            public void handleMessage(Message msg) {
-                DispatchQueue.this.handleMessage(msg);
-            }
-        };
+        handler = new Handler();
         syncLatch.countDown();
         Looper.loop();
     }

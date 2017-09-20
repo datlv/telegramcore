@@ -3,16 +3,16 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
 
 import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
@@ -24,6 +24,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Vibrator;
+import android.support.v4.hardware.fingerprint.FingerprintManagerCompat;
 import android.support.v4.os.CancellationSignal;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -53,9 +54,7 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
-import org.telegram.messenger.support.fingerprint.FingerprintManagerCompat;
-import org.telegram.ui.ActionBar.AlertDialog;
-import org.telegram.ui.ActionBar.Theme;
+import org.telegram.messenger.AnimatorListenerAdapterProxy;
 
 import java.util.ArrayList;
 import java.util.Locale;
@@ -126,7 +125,7 @@ public class PasscodeView extends FrameLayout {
             try {
                 performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
 
 
@@ -187,7 +186,7 @@ public class PasscodeView extends FrameLayout {
                     currentAnimation = new AnimatorSet();
                     currentAnimation.setDuration(150);
                     currentAnimation.playTogether(animators);
-                    currentAnimation.addListener(new AnimatorListenerAdapter() {
+                    currentAnimation.addListener(new AnimatorListenerAdapterProxy() {
                         @Override
                         public void onAnimationEnd(Animator animation) {
                             if (currentAnimation != null && currentAnimation.equals(animation)) {
@@ -221,7 +220,7 @@ public class PasscodeView extends FrameLayout {
             currentAnimation = new AnimatorSet();
             currentAnimation.setDuration(150);
             currentAnimation.playTogether(animators);
-            currentAnimation.addListener(new AnimatorListenerAdapter() {
+            currentAnimation.addListener(new AnimatorListenerAdapterProxy() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
                     if (currentAnimation != null && currentAnimation.equals(animation)) {
@@ -247,7 +246,7 @@ public class PasscodeView extends FrameLayout {
             try {
                 performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
 
             ArrayList<Animator> animators = new ArrayList<>();
@@ -298,7 +297,7 @@ public class PasscodeView extends FrameLayout {
             currentAnimation = new AnimatorSet();
             currentAnimation.setDuration(150);
             currentAnimation.playTogether(animators);
-            currentAnimation.addListener(new AnimatorListenerAdapter() {
+            currentAnimation.addListener(new AnimatorListenerAdapterProxy() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
                     if (currentAnimation != null && currentAnimation.equals(animation)) {
@@ -344,7 +343,7 @@ public class PasscodeView extends FrameLayout {
                 currentAnimation = new AnimatorSet();
                 currentAnimation.setDuration(150);
                 currentAnimation.playTogether(animators);
-                currentAnimation.addListener(new AnimatorListenerAdapter() {
+                currentAnimation.addListener(new AnimatorListenerAdapterProxy() {
                     @Override
                     public void onAnimationEnd(Animator animation) {
                         if (currentAnimation != null && currentAnimation.equals(animation)) {
@@ -757,7 +756,7 @@ public class PasscodeView extends FrameLayout {
         AnimatorSet.playTogether(
                 ObjectAnimator.ofFloat(this, "translationY", AndroidUtilities.dp(20)),
                 ObjectAnimator.ofFloat(this, "alpha", AndroidUtilities.dp(0.0f)));
-        AnimatorSet.addListener(new AnimatorListenerAdapter() {
+        AnimatorSet.addListener(new AnimatorListenerAdapterProxy() {
             @Override
             public void onAnimationEnd(Animator animation) {
                 setVisibility(View.GONE);
@@ -781,7 +780,7 @@ public class PasscodeView extends FrameLayout {
         AnimatorSet AnimatorSet = new AnimatorSet();
         AnimatorSet.playTogether(ObjectAnimator.ofFloat(passcodeTextView, "translationX", AndroidUtilities.dp(x)));
         AnimatorSet.setDuration(50);
-        AnimatorSet.addListener(new AnimatorListenerAdapter() {
+        AnimatorSet.addListener(new AnimatorListenerAdapterProxy() {
             @Override
             public void onAnimationEnd(Animator animation) {
                 shakeTextView(num == 5 ? 0 : -x, num + 1);
@@ -825,7 +824,7 @@ public class PasscodeView extends FrameLayout {
                 }
                 fingerprintDialog = null;
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
         }
         try {
@@ -834,7 +833,7 @@ public class PasscodeView extends FrameLayout {
                 cancellationSignal = null;
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
     }
 
@@ -846,16 +845,16 @@ public class PasscodeView extends FrameLayout {
                     return;
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
             try {
                 FingerprintManagerCompat fingerprintManager = FingerprintManagerCompat.from(ApplicationLoader.applicationContext);
                 if (fingerprintManager.isHardwareDetected() && fingerprintManager.hasEnrolledFingerprints()) {
                     RelativeLayout relativeLayout = new RelativeLayout(getContext());
-                    relativeLayout.setPadding(AndroidUtilities.dp(24), 0, AndroidUtilities.dp(24), 0);
+                    relativeLayout.setPadding(AndroidUtilities.dp(24), AndroidUtilities.dp(16), AndroidUtilities.dp(24), AndroidUtilities.dp(8));
 
                     TextView fingerprintTextView = new TextView(getContext());
-                    fingerprintTextView.setTextColor(Theme.getColor(Theme.key_dialogTextBlack));
+                    fingerprintTextView.setTextColor(0xff939393);
                     fingerprintTextView.setId(id_fingerprint_textview);
                     fingerprintTextView.setTextAppearance(android.R.style.TextAppearance_Material_Subhead);
                     fingerprintTextView.setText(LocaleController.getString("FingerprintInfo", R.string.FingerprintInfo));
@@ -874,7 +873,7 @@ public class PasscodeView extends FrameLayout {
                     fingerprintStatusTextView.setGravity(Gravity.CENTER_VERTICAL);
                     fingerprintStatusTextView.setText(LocaleController.getString("FingerprintHelp", R.string.FingerprintHelp));
                     fingerprintStatusTextView.setTextAppearance(android.R.style.TextAppearance_Material_Body1);
-                    fingerprintStatusTextView.setTextColor(Theme.getColor(Theme.key_dialogTextBlack) & 0x42ffffff);
+                    fingerprintStatusTextView.setTextColor(0x42000000);
                     relativeLayout.addView(fingerprintStatusTextView);
                     layoutParams = LayoutHelper.createRelative(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT);
                     layoutParams.setMarginStart(AndroidUtilities.dp(16));
@@ -903,7 +902,7 @@ public class PasscodeView extends FrameLayout {
                                 fingerprintDialog.dismiss();
                             }
                         } catch (Exception e) {
-                            FileLog.e(e);
+                            FileLog.e("tmessages", e);
                         }
                     }
                     fingerprintDialog = builder.show();
@@ -935,7 +934,7 @@ public class PasscodeView extends FrameLayout {
                                     fingerprintDialog.dismiss();
                                 }
                             } catch (Exception e) {
-                                FileLog.e(e);
+                                FileLog.e("tmessages", e);
                             }
                             fingerprintDialog = null;
                             processDone(true);
@@ -975,7 +974,7 @@ public class PasscodeView extends FrameLayout {
         if (selectedBackground == 1000001) {
             backgroundFrameLayout.setBackgroundColor(0xff517c9e);
         } else {
-            backgroundDrawable = Theme.getCachedWallpaper();
+            backgroundDrawable = ApplicationLoader.getCachedWallpaper();
             if (backgroundDrawable != null) {
                 backgroundFrameLayout.setBackgroundColor(0xbf000000);
             } else {

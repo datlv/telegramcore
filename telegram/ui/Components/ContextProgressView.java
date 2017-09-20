@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -15,7 +15,6 @@ import android.graphics.RectF;
 import android.view.View;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.ui.ActionBar.Theme;
 
 public class ContextProgressView extends View {
 
@@ -24,7 +23,6 @@ public class ContextProgressView extends View {
     private RectF cicleRect = new RectF();
     private int radOffset = 0;
     private long lastUpdateTime;
-    private int currentColorType;
 
     public ContextProgressView(Context context, int colorType) {
         super(context);
@@ -33,22 +31,14 @@ public class ContextProgressView extends View {
         outerPaint.setStyle(Paint.Style.STROKE);
         outerPaint.setStrokeWidth(AndroidUtilities.dp(2));
         outerPaint.setStrokeCap(Paint.Cap.ROUND);
-        currentColorType = colorType;
-        updateColors();
-    }
 
-    public void updateColors() {
-        if (currentColorType == 0) {
-            innerPaint.setColor(Theme.getColor(Theme.key_contextProgressInner1));
-            outerPaint.setColor(Theme.getColor(Theme.key_contextProgressOuter1));
-        } else if (currentColorType == 1) {
-            innerPaint.setColor(Theme.getColor(Theme.key_contextProgressInner2));
-            outerPaint.setColor(Theme.getColor(Theme.key_contextProgressOuter2));
-        } else if (currentColorType == 2) {
-            innerPaint.setColor(Theme.getColor(Theme.key_contextProgressInner3));
-            outerPaint.setColor(Theme.getColor(Theme.key_contextProgressOuter3));
+        if (colorType == 0) {
+            innerPaint.setColor(0xffbfdff6);
+            outerPaint.setColor(0xff2b96e2);
+        } else {
+            innerPaint.setColor(0xffbfdff6);
+            outerPaint.setColor(0xffffffff);
         }
-        invalidate();
     }
 
     @Override

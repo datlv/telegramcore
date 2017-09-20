@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger;
@@ -53,6 +53,7 @@ import java.util.Locale;
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class MusicBrowserService extends MediaBrowserService implements NotificationCenter.NotificationCenterDelegate {
 
+    private static final String AUTO_APP_PACKAGE_NAME = "com.google.android.projection.gearhead";
     private static final String SLOT_RESERVATION_SKIP_TO_NEXT = "com.google.android.gms.car.media.ALWAYS_RESERVE_SPACE_FOR.ACTION_SKIP_TO_NEXT";
     private static final String SLOT_RESERVATION_SKIP_TO_PREV = "com.google.android.gms.car.media.ALWAYS_RESERVE_SPACE_FOR.ACTION_SKIP_TO_PREVIOUS";
     private static final String SLOT_RESERVATION_QUEUE = "com.google.android.gms.car.media.ALWAYS_RESERVE_SPACE_FOR.ACTION_QUEUE";
@@ -108,9 +109,9 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
 
         updatePlaybackState(null);
 
-        NotificationCenter.getInstance().addObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
-        NotificationCenter.getInstance().addObserver(this, NotificationCenter.messagePlayingDidStarted);
-        NotificationCenter.getInstance().addObserver(this, NotificationCenter.messagePlayingDidReset);
+        NotificationCenter.getInstance().addObserver(this, NotificationCenter.audioPlayStateChanged);
+        NotificationCenter.getInstance().addObserver(this, NotificationCenter.audioDidStarted);
+        NotificationCenter.getInstance().addObserver(this, NotificationCenter.audioDidReset);
     }
 
     @Override
@@ -220,7 +221,7 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
                             }
                         }
                     } catch (Exception e) {
-                        FileLog.e(e);
+                        FileLog.e("tmessages", e);
                     }
                     AndroidUtilities.runOnUIThread(new Runnable() {
                         @Override
@@ -315,7 +316,7 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
             try {
                 did = Integer.parseInt(parentMediaId.replace("__CHAT_", ""));
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
             ArrayList<MessageObject> arrayList = musicObjects.get(did);
             if (arrayList != null) {
@@ -351,7 +352,7 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
                 return result;
             }
         } catch (Throwable e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
         return null;
     }
@@ -363,7 +364,7 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
             if (messageObject == null) {
                 onPlayFromMediaId(lastSelectedDialog + "_" + 0, null);
             } else {
-                MediaController.getInstance().playMessage(messageObject);
+                MediaController.getInstance().playAudio(messageObject);
             }
         }
 
@@ -415,7 +416,7 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
                     }
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
             handlePlayRequest();
         }
@@ -486,7 +487,7 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
             if (MediaController.getInstance().isDownloadingCurrentMessage()) {
                 state = PlaybackState.STATE_BUFFERING;
             } else {
-                state = MediaController.getInstance().isMessagePaused() ? PlaybackState.STATE_PAUSED : PlaybackState.STATE_PLAYING;
+                state = MediaController.getInstance().isAudioPaused() ? PlaybackState.STATE_PAUSED : PlaybackState.STATE_PLAYING;
             }
         }
 
@@ -508,7 +509,7 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
         long actions = PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH;
         MessageObject playingMessageObject = MediaController.getInstance().getPlayingMessageObject();
         if (playingMessageObject != null) {
-            if (!MediaController.getInstance().isMessagePaused()) {
+            if (!MediaController.getInstance().isAudioPaused()) {
                 actions |= PlaybackState.ACTION_PAUSE;
             }
             actions |= PlaybackState.ACTION_SKIP_TO_PREVIOUS;
@@ -523,9 +524,9 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
         updatePlaybackState(withError);
         stopSelf();
         serviceStarted = false;
-        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
-        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.messagePlayingDidStarted);
-        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.messagePlayingDidReset);
+        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.audioPlayStateChanged);
+        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.audioDidStarted);
+        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.audioDidReset);
     }
 
     private void handlePlayRequest() {
@@ -558,7 +559,7 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
     }
 
     private void handlePauseRequest() {
-        MediaController.getInstance().pauseMessage(MediaController.getInstance().getPlayingMessageObject());
+        MediaController.getInstance().pauseAudio(MediaController.getInstance().getPlayingMessageObject());
         delayedStopHandler.removeCallbacksAndMessages(null);
         delayedStopHandler.sendEmptyMessageDelayed(0, STOP_DELAY);
     }
@@ -581,7 +582,7 @@ public class MusicBrowserService extends MediaBrowserService implements Notifica
             MusicBrowserService service = mWeakReference.get();
             if (service != null) {
                 MessageObject messageObject = MediaController.getInstance().getPlayingMessageObject();
-                if (messageObject != null && !MediaController.getInstance().isMessagePaused()) {
+                if (messageObject != null && !MediaController.getInstance().isAudioPaused()) {
                     return;
                 }
                 service.stopSelf();

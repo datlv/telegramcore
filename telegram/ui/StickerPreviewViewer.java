@@ -3,26 +3,18 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
 
-import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.app.Dialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
-import android.text.Layout;
-import android.text.StaticLayout;
-import android.text.TextPaint;
-import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -32,13 +24,9 @@ import android.widget.AdapterView;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.Emoji;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.FileLog;
-import org.telegram.messenger.LocaleController;
-import org.telegram.messenger.R;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.Cells.ContextLinkCell;
 import org.telegram.ui.Cells.StickerCell;
 import org.telegram.ui.Cells.StickerEmojiCell;
@@ -55,23 +43,14 @@ public class StickerPreviewViewer {
 
         @Override
         protected void onDraw(Canvas canvas) {
-            StickerPreviewViewer.this.onDraw(canvas);
+            getInstance().onDraw(canvas);
         }
     }
-
-    public interface StickerPreviewViewerDelegate {
-        void sentSticker(TLRPC.Document sticker);
-        void openSet(TLRPC.InputStickerSet set);
-    }
-
-    private static TextPaint textPaint;
 
     private int startX;
     private int startY;
     private View currentStickerPreviewCell;
     private Runnable openStickerPreviewRunnable;
-    private Dialog visibleDialog;
-    private StickerPreviewViewerDelegate delegate;
 
     private ColorDrawable backgroundDrawable = new ColorDrawable(0x71000000);
     private Activity parentActivity;
@@ -81,49 +60,11 @@ public class StickerPreviewViewer {
     private ImageReceiver centerImage = new ImageReceiver();
     private boolean isVisible = false;
     private float showProgress;
-    private StaticLayout stickerEmojiLayout;
     private long lastUpdateTime;
     private int keyboardHeight = AndroidUtilities.dp(200);
-    private Runnable showSheetRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (parentActivity == null || currentSet == null) {
-                return;
-            }
-            BottomSheet.Builder builder = new BottomSheet.Builder(parentActivity);
-            builder.setItems(new CharSequence[]{
-                    LocaleController.getString("SendStickerPreview", R.string.SendStickerPreview),
-                    LocaleController.formatString("ViewPackPreview", R.string.ViewPackPreview)}, new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, final int which) {
-                    if (parentActivity == null) {
-                        return;
-                    }
-                    if (delegate != null) {
-                        if (which == 0) {
-                            delegate.sentSticker(currentSticker);
-                        } else if (which == 1) {
-                            delegate.openSet(currentSet);
-                        }
-                    }
-                }
-            });
-            visibleDialog = builder.create();
-            visibleDialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
-                @Override
-                public void onDismiss(DialogInterface dialog) {
-                    visibleDialog = null;
-                    close();
-                }
-            });
-            visibleDialog.show();
-        }
-    };
 
-    private TLRPC.Document currentSticker;
-    private TLRPC.InputStickerSet currentSet;
+    private TLRPC.Document currentSticker = null;
 
-    @SuppressLint("StaticFieldLeak")
     private static volatile StickerPreviewViewer Instance = null;
     public static StickerPreviewViewer getInstance() {
         StickerPreviewViewer localInstance = Instance;
@@ -155,8 +96,7 @@ public class StickerPreviewViewer {
         }
     }
 
-    public boolean onTouch(MotionEvent event, final View listView, final int height, final Object listener, StickerPreviewViewerDelegate stickerPreviewViewerDelegate) {
-        delegate = stickerPreviewViewerDelegate;
+    public boolean onTouch(MotionEvent event, final View listView, final int height, final Object listener) {
         if (openStickerPreviewRunnable != null || isVisible()) {
             if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL || event.getAction() == MotionEvent.ACTION_POINTER_UP) {
                 AndroidUtilities.runOnUIThread(new Runnable() {
@@ -234,13 +174,13 @@ public class StickerPreviewViewer {
                             currentStickerPreviewCell = view;
                             setKeyboardHeight(height);
                             if (currentStickerPreviewCell instanceof StickerEmojiCell) {
-                                open(((StickerEmojiCell) currentStickerPreviewCell).getSticker(), ((StickerEmojiCell) currentStickerPreviewCell).isRecent());
+                                open(((StickerEmojiCell) currentStickerPreviewCell).getSticker());
                                 ((StickerEmojiCell) currentStickerPreviewCell).setScaled(true);
                             } else if (currentStickerPreviewCell instanceof StickerCell) {
-                                open(((StickerCell) currentStickerPreviewCell).getSticker(), false);
+                                open(((StickerCell) currentStickerPreviewCell).getSticker());
                                 ((StickerCell) currentStickerPreviewCell).setScaled(true);
                             } else if (currentStickerPreviewCell instanceof ContextLinkCell) {
-                                open(((ContextLinkCell) currentStickerPreviewCell).getDocument(), false);
+                                open(((ContextLinkCell) currentStickerPreviewCell).getDocument());
                                 ((ContextLinkCell) currentStickerPreviewCell).setScaled(true);
                             }
                             return true;
@@ -263,8 +203,7 @@ public class StickerPreviewViewer {
         return false;
     }
 
-    public boolean onInterceptTouchEvent(MotionEvent event, final View listView, final int height, StickerPreviewViewerDelegate stickerPreviewViewerDelegate) {
-        delegate = stickerPreviewViewerDelegate;
+    public boolean onInterceptTouchEvent(MotionEvent event, final View listView, final int height) {
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             int x = (int) event.getX();
             int y = (int) event.getY();
@@ -323,13 +262,13 @@ public class StickerPreviewViewer {
                         setParentActivity((Activity) listView.getContext());
                         setKeyboardHeight(height);
                         if (currentStickerPreviewCell instanceof StickerEmojiCell) {
-                            open(((StickerEmojiCell) currentStickerPreviewCell).getSticker(), ((StickerEmojiCell) currentStickerPreviewCell).isRecent());
+                            open(((StickerEmojiCell) currentStickerPreviewCell).getSticker());
                             ((StickerEmojiCell) currentStickerPreviewCell).setScaled(true);
                         } else if (currentStickerPreviewCell instanceof StickerCell) {
-                            open(((StickerCell) currentStickerPreviewCell).getSticker(), false);
+                            open(((StickerCell) currentStickerPreviewCell).getSticker());
                             ((StickerCell) currentStickerPreviewCell).setScaled(true);
                         } else if (currentStickerPreviewCell instanceof ContextLinkCell) {
-                            open(((ContextLinkCell) currentStickerPreviewCell).getDocument(), false);
+                            open(((ContextLinkCell) currentStickerPreviewCell).getDocument());
                             ((ContextLinkCell) currentStickerPreviewCell).setScaled(true);
                         }
                     }
@@ -339,10 +278,6 @@ public class StickerPreviewViewer {
             }
         }
         return false;
-    }
-
-    public void setDelegate(StickerPreviewViewerDelegate stickerPreviewViewerDelegate) {
-        delegate = stickerPreviewViewerDelegate;
     }
 
     public void setParentActivity(Activity activity) {
@@ -391,51 +326,12 @@ public class StickerPreviewViewer {
         keyboardHeight = height;
     }
 
-    public void open(TLRPC.Document sticker, boolean isRecent) {
+    public void open(TLRPC.Document sticker) {
         if (parentActivity == null || sticker == null) {
             return;
         }
-        if (textPaint == null) {
-            textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-            textPaint.setTextSize(AndroidUtilities.dp(24));
-        }
 
-        TLRPC.InputStickerSet newSet = null;
-        if (isRecent) {
-            for (int a = 0; a < sticker.attributes.size(); a++) {
-                TLRPC.DocumentAttribute attribute = sticker.attributes.get(a);
-                if (attribute instanceof TLRPC.TL_documentAttributeSticker && attribute.stickerset != null) {
-                    newSet = attribute.stickerset;
-                    break;
-                }
-            }
-            if (newSet != null && currentSet != newSet) {
-                try {
-                    if (visibleDialog != null) {
-                        visibleDialog.setOnDismissListener(null);
-                        visibleDialog.dismiss();
-                    }
-                } catch (Exception e) {
-                    FileLog.e(e);
-                }
-                AndroidUtilities.cancelRunOnUIThread(showSheetRunnable);
-                AndroidUtilities.runOnUIThread(showSheetRunnable, 2000);
-            }
-        }
-        currentSet = newSet;
-        centerImage.setImage(sticker, null, sticker.thumb.location, null, "webp", 1);
-        stickerEmojiLayout = null;
-        for (int a = 0; a < sticker.attributes.size(); a++) {
-            TLRPC.DocumentAttribute attribute = sticker.attributes.get(a);
-            if (attribute instanceof TLRPC.TL_documentAttributeSticker) {
-                if (!TextUtils.isEmpty(attribute.alt)) {
-                    CharSequence emoji = Emoji.replaceEmoji(attribute.alt, textPaint.getFontMetricsInt(), AndroidUtilities.dp(24), false);
-                    stickerEmojiLayout = new StaticLayout(emoji, textPaint, AndroidUtilities.dp(100), Layout.Alignment.ALIGN_CENTER, 1.0f, 0.0f, false);
-                    break;
-                }
-            }
-        }
-
+        centerImage.setImage(sticker, null, sticker.thumb.location, null, "webp", true);
         currentSticker = sticker;
         containerView.invalidate();
 
@@ -447,7 +343,7 @@ public class StickerPreviewViewer {
                     wm.removeView(windowView);
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
             WindowManager wm = (WindowManager) parentActivity.getSystemService(Context.WINDOW_SERVICE);
             wm.addView(windowView, windowLayoutParams);
@@ -462,40 +358,32 @@ public class StickerPreviewViewer {
     }
 
     public void close() {
-        if (parentActivity == null || visibleDialog != null) {
+        if (parentActivity == null) {
             return;
         }
-        AndroidUtilities.cancelRunOnUIThread(showSheetRunnable);
         showProgress = 1.0f;
-        lastUpdateTime = System.currentTimeMillis();
-        containerView.invalidate();
+        currentSticker = null;
+        isVisible = false;
+        AndroidUtilities.unlockOrientation(parentActivity);
+        AndroidUtilities.runOnUIThread(new Runnable() {
+            @Override
+            public void run() {
+                centerImage.setImageBitmap((Bitmap)null);
+            }
+        });
         try {
-            if (visibleDialog != null) {
-                visibleDialog.dismiss();
-                visibleDialog = null;
+            if (windowView.getParent() != null) {
+                WindowManager wm = (WindowManager) parentActivity.getSystemService(Context.WINDOW_SERVICE);
+                wm.removeView(windowView);
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
-        currentSticker = null;
-        currentSet = null;
-        delegate = null;
-        isVisible = false;
     }
 
     public void destroy() {
         isVisible = false;
-        delegate = null;
         currentSticker = null;
-        currentSet = null;
-        try {
-            if (visibleDialog != null) {
-                visibleDialog.dismiss();
-                visibleDialog = null;
-            }
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
         if (parentActivity == null || windowView == null) {
             return;
         }
@@ -506,12 +394,11 @@ public class StickerPreviewViewer {
             }
             windowView = null;
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
         Instance = null;
     }
 
-    @SuppressLint("DrawAllocation")
     private void onDraw(Canvas canvas) {
         if (containerView == null || backgroundDrawable == null) {
             return;
@@ -522,7 +409,7 @@ public class StickerPreviewViewer {
 
         canvas.save();
         int size = (int) (Math.min(containerView.getWidth(), containerView.getHeight()) / 1.8f);
-        canvas.translate(containerView.getWidth() / 2, Math.max(size / 2 + AndroidUtilities.statusBarHeight + (stickerEmojiLayout!=null ? AndroidUtilities.dp(40) : 0), (containerView.getHeight() - keyboardHeight) / 2));
+        canvas.translate(containerView.getWidth() / 2, Math.max(size / 2 + AndroidUtilities.statusBarHeight, (containerView.getHeight() - keyboardHeight) / 2));
         Bitmap bitmap = centerImage.getBitmap();
         if (bitmap != null) {
             float scale = 0.8f * showProgress / 0.8f;
@@ -531,47 +418,15 @@ public class StickerPreviewViewer {
             centerImage.setImageCoords(-size / 2, -size / 2, size, size);
             centerImage.draw(canvas);
         }
-        if (stickerEmojiLayout != null) {
-            canvas.translate(-AndroidUtilities.dp(50), -centerImage.getImageHeight() / 2 - AndroidUtilities.dp(30));
-            stickerEmojiLayout.draw(canvas);
-        }
         canvas.restore();
-        if (isVisible) {
-            if (showProgress != 1) {
-                long newTime = System.currentTimeMillis();
-                long dt = newTime - lastUpdateTime;
-                lastUpdateTime = newTime;
-                showProgress += dt / 120.0f;
-                containerView.invalidate();
-                if (showProgress > 1.0f) {
-                    showProgress = 1.0f;
-                }
-            }
-        } else if (showProgress != 0) {
+        if (showProgress != 1) {
             long newTime = System.currentTimeMillis();
             long dt = newTime - lastUpdateTime;
             lastUpdateTime = newTime;
-            showProgress -= dt / 120.0f;
+            showProgress += dt / 150.0f;
             containerView.invalidate();
-            if (showProgress < 0.0f) {
-                showProgress = 0.0f;
-            }
-            if (showProgress == 0) {
-                AndroidUtilities.unlockOrientation(parentActivity);
-                AndroidUtilities.runOnUIThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        centerImage.setImageBitmap((Bitmap) null);
-                    }
-                });
-                try {
-                    if (windowView.getParent() != null) {
-                        WindowManager wm = (WindowManager) parentActivity.getSystemService(Context.WINDOW_SERVICE);
-                        wm.removeView(windowView);
-                    }
-                } catch (Exception e) {
-                    FileLog.e(e);
-                }
+            if (showProgress > 1.0f) {
+                showProgress = 1.0f;
             }
         }
     }

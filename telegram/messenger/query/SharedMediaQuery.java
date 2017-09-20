@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.messenger.query;
@@ -147,7 +147,7 @@ public class SharedMediaQuery {
         if (message.media instanceof TLRPC.TL_messageMediaPhoto) {
             return MEDIA_PHOTOVIDEO;
         } else if (message.media instanceof TLRPC.TL_messageMediaDocument) {
-            if (MessageObject.isVoiceMessage(message) || MessageObject.isRoundVideoMessage(message)) {
+            if (MessageObject.isVoiceMessage(message)) {
                 return MEDIA_AUDIO;
             } else if (MessageObject.isVideoMessage(message)) {
                 return MEDIA_PHOTOVIDEO;
@@ -170,9 +170,7 @@ public class SharedMediaQuery {
     }
 
     public static boolean canAddMessageToMedia(TLRPC.Message message) {
-        if (message instanceof TLRPC.TL_message && (message.media instanceof TLRPC.TL_messageMediaPhoto || message.media instanceof TLRPC.TL_messageMediaDocument) && message.media.ttl_seconds != 0) {
-            return false;
-        } else if (message instanceof TLRPC.TL_message_secret && message.media instanceof TLRPC.TL_messageMediaPhoto && message.ttl != 0 && message.ttl <= 60) {
+        if (message instanceof TLRPC.TL_message_secret && message.media instanceof TLRPC.TL_messageMediaPhoto && message.ttl != 0 && message.ttl <= 60) {
             return false;
         } else if (message.media instanceof TLRPC.TL_messageMediaPhoto ||
                 message.media instanceof TLRPC.TL_messageMediaDocument && !MessageObject.isGifDocument(message.media.document)) {
@@ -252,7 +250,7 @@ public class SharedMediaQuery {
                     state2.step();
                     state2.dispose();
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
         });
@@ -283,7 +281,7 @@ public class SharedMediaQuery {
                     }
                     processLoadedMediaCount(count, uid, type, classGuid, true);
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
         });
@@ -416,7 +414,7 @@ public class SharedMediaQuery {
                     res.messages.clear();
                     res.chats.clear();
                     res.users.clear();
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 } finally {
                     processLoadedMedia(res, uid, offset, count, max_id, type, true, classGuid, isChannel, topReached);
                 }
@@ -468,7 +466,7 @@ public class SharedMediaQuery {
                     }
                     MessagesStorage.getInstance().getDatabase().commitTransaction();
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
         });
@@ -496,7 +494,7 @@ public class SharedMediaQuery {
                     }
                     cursor.dispose();
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
                 AndroidUtilities.runOnUIThread(new Runnable() {
                     @Override

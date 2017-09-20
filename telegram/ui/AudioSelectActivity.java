@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui;
@@ -14,7 +14,9 @@ import android.provider.MediaStore;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.FrameLayout;
+import android.widget.ListView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
@@ -25,20 +27,16 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
-import org.telegram.messenger.support.widget.LinearLayoutManager;
-import org.telegram.messenger.support.widget.RecyclerView;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
-import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.ActionBar.ThemeDescription;
+import org.telegram.ui.Adapters.BaseFragmentAdapter;
 import org.telegram.ui.Cells.AudioCell;
 import org.telegram.ui.Components.EmptyTextProgressView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.PickerBottomLayout;
-import org.telegram.ui.Components.RecyclerListView;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -49,8 +47,6 @@ public class AudioSelectActivity extends BaseFragment implements NotificationCen
     private ListAdapter listViewAdapter;
     private EmptyTextProgressView progressView;
     private PickerBottomLayout bottomLayout;
-    private RecyclerListView listView;
-    private View shadow;
 
     private boolean loadingAudio;
 
@@ -69,7 +65,7 @@ public class AudioSelectActivity extends BaseFragment implements NotificationCen
     public boolean onFragmentCreate() {
         super.onFragmentCreate();
         NotificationCenter.getInstance().addObserver(this, NotificationCenter.closeChats);
-        NotificationCenter.getInstance().addObserver(this, NotificationCenter.messagePlayingDidReset);
+        NotificationCenter.getInstance().addObserver(this, NotificationCenter.audioDidReset);
         loadAudio();
         return true;
     }
@@ -78,8 +74,8 @@ public class AudioSelectActivity extends BaseFragment implements NotificationCen
     public void onFragmentDestroy() {
         super.onFragmentDestroy();
         NotificationCenter.getInstance().removeObserver(this, NotificationCenter.closeChats);
-        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.messagePlayingDidReset);
-        if (playingAudio != null && MediaController.getInstance().isPlayingMessage(playingAudio)) {
+        NotificationCenter.getInstance().removeObserver(this, NotificationCenter.audioDidReset);
+        if (playingAudio != null && MediaController.getInstance().isPlayingAudio(playingAudio)) {
             MediaController.getInstance().cleanupPlayer(true, true);
         }
     }
@@ -105,17 +101,18 @@ public class AudioSelectActivity extends BaseFragment implements NotificationCen
         progressView.setText(LocaleController.getString("NoAudio", R.string.NoAudio));
         frameLayout.addView(progressView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
-        listView = new RecyclerListView(context);
+        ListView listView = new ListView(context);
         listView.setEmptyView(progressView);
         listView.setVerticalScrollBarEnabled(false);
-        listView.setLayoutManager(new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false));
+        listView.setDivider(null);
+        listView.setDividerHeight(0);
         listView.setAdapter(listViewAdapter = new ListAdapter(context));
-        listView.setVerticalScrollbarPosition(LocaleController.isRTL ? RecyclerListView.SCROLLBAR_POSITION_LEFT : RecyclerListView.SCROLLBAR_POSITION_RIGHT);
+        listView.setVerticalScrollbarPosition(LocaleController.isRTL ? ListView.SCROLLBAR_POSITION_LEFT : ListView.SCROLLBAR_POSITION_RIGHT);
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT | Gravity.TOP, 0, 0, 0, 48));
 
-        listView.setOnItemClickListener(new RecyclerListView.OnItemClickListener() {
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
-            public void onItemClick(View view, int position) {
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
                 AudioCell audioCell = (AudioCell) view;
                 MediaController.AudioEntry audioEntry = audioCell.getAudioEntry();
                 if (selectedAudios.containsKey(audioEntry.id)) {
@@ -168,7 +165,7 @@ public class AudioSelectActivity extends BaseFragment implements NotificationCen
     public void didReceivedNotification(int id, Object... args) {
         if (id == NotificationCenter.closeChats) {
             removeSelfFromStack();
-        } else if (id == NotificationCenter.messagePlayingDidReset) {
+        } else if (id == NotificationCenter.audioDidReset) {
             if (listViewAdapter != null) {
                 listViewAdapter.notifyDataSetChanged();
             }
@@ -225,7 +222,6 @@ public class AudioSelectActivity extends BaseFragment implements NotificationCen
                         message.message = "-1";
                         message.attachPath = audioEntry.path;
                         message.media = new TLRPC.TL_messageMediaDocument();
-                        message.media.flags |= 3;
                         message.media.document = new TLRPC.TL_document();
                         message.flags |= TLRPC.MESSAGE_FLAG_HAS_MEDIA | TLRPC.MESSAGE_FLAG_HAS_FROM_ID;
 
@@ -257,7 +253,7 @@ public class AudioSelectActivity extends BaseFragment implements NotificationCen
                         id--;
                     }
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 } finally {
                     if (cursor != null) {
                         cursor.close();
@@ -275,8 +271,7 @@ public class AudioSelectActivity extends BaseFragment implements NotificationCen
         });
     }
 
-    private class ListAdapter extends RecyclerListView.SelectionAdapter {
-
+    private class ListAdapter extends BaseFragmentAdapter {
         private Context mContext;
 
         public ListAdapter(Context context) {
@@ -284,10 +279,21 @@ public class AudioSelectActivity extends BaseFragment implements NotificationCen
         }
 
         @Override
-        public int getItemCount() {
+        public boolean areAllItemsEnabled() {
+            return true;
+        }
+
+        @Override
+        public boolean isEnabled(int i) {
+            return true;
+        }
+
+        @Override
+        public int getCount() {
             return audioEntries.size();
         }
 
+        @Override
         public Object getItem(int i) {
             return audioEntries.get(i);
         }
@@ -298,66 +304,40 @@ public class AudioSelectActivity extends BaseFragment implements NotificationCen
         }
 
         @Override
-        public boolean isEnabled(RecyclerView.ViewHolder holder) {
-            return true;
+        public boolean hasStableIds() {
+            return false;
         }
 
         @Override
-        public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            AudioCell view = new AudioCell(mContext);
-            view.setDelegate(new AudioCell.AudioCellDelegate() {
-                @Override
-                public void startedPlayingAudio(MessageObject messageObject) {
-                    playingAudio = messageObject;
-                }
-            });
-            return new RecyclerListView.Holder(view);
-        }
-
-        @Override
-        public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
-            MediaController.AudioEntry audioEntry = audioEntries.get(position);
-            ((AudioCell) holder.itemView).setAudio(audioEntries.get(position), position != audioEntries.size() - 1, selectedAudios.containsKey(audioEntry.id));
+        public View getView(int i, View view, ViewGroup viewGroup) {
+            int type = getItemViewType(i);
+            if (view == null) {
+                view = new AudioCell(mContext);
+                ((AudioCell) view).setDelegate(new AudioCell.AudioCellDelegate() {
+                    @Override
+                    public void startedPlayingAudio(MessageObject messageObject) {
+                        playingAudio = messageObject;
+                    }
+                });
+            }
+            MediaController.AudioEntry audioEntry = audioEntries.get(i);
+            ((AudioCell) view).setAudio(audioEntries.get(i), i != audioEntries.size() - 1, selectedAudios.containsKey(audioEntry.id));
+            return view;
         }
 
         @Override
         public int getItemViewType(int i) {
             return 0;
         }
-    }
 
-    @Override
-    public ThemeDescription[] getThemeDescriptions() {
-        return new ThemeDescription[]{
-                new ThemeDescription(fragmentView, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundWhite),
+        @Override
+        public int getViewTypeCount() {
+            return 1;
+        }
 
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_actionBarDefault),
-                new ThemeDescription(listView, ThemeDescription.FLAG_LISTGLOWCOLOR, null, null, null, null, Theme.key_actionBarDefault),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_ITEMSCOLOR, null, null, null, null, Theme.key_actionBarDefaultIcon),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_TITLECOLOR, null, null, null, null, Theme.key_actionBarDefaultTitle),
-                new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SELECTORCOLOR, null, null, null, null, Theme.key_actionBarDefaultSelector),
-
-                new ThemeDescription(listView, ThemeDescription.FLAG_SELECTOR, null, null, null, null, Theme.key_listSelector),
-                new ThemeDescription(listView, 0, new Class[]{View.class}, Theme.dividerPaint, null, null, Theme.key_divider),
-
-                new ThemeDescription(progressView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_emptyListPlaceholder),
-                new ThemeDescription(progressView, ThemeDescription.FLAG_PROGRESSBAR, null, null, null, null, Theme.key_progressCircle),
-
-                new ThemeDescription(listView, 0, new Class[]{AudioCell.class}, new String[]{"titleTextView"}, null, null, null, Theme.key_windowBackgroundWhiteBlackText),
-                new ThemeDescription(listView, 0, new Class[]{AudioCell.class}, new String[]{"genreTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText2),
-                new ThemeDescription(listView, 0, new Class[]{AudioCell.class}, new String[]{"authorTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText2),
-                new ThemeDescription(listView, 0, new Class[]{AudioCell.class}, new String[]{"timeTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText3),
-                new ThemeDescription(listView, ThemeDescription.FLAG_CHECKBOX, new Class[]{AudioCell.class}, new String[]{"checkBox"}, null, null, null, Theme.key_musicPicker_checkbox),
-                new ThemeDescription(listView, ThemeDescription.FLAG_CHECKBOXCHECK, new Class[]{AudioCell.class}, new String[]{"checkBox"}, null, null, null, Theme.key_musicPicker_checkboxCheck),
-                new ThemeDescription(listView, ThemeDescription.FLAG_USEBACKGROUNDDRAWABLE, new Class[]{AudioCell.class}, new String[]{"playButton"}, null, null, null, Theme.key_musicPicker_buttonIcon),
-                new ThemeDescription(listView, ThemeDescription.FLAG_BACKGROUNDFILTER | ThemeDescription.FLAG_USEBACKGROUNDDRAWABLE, new Class[]{AudioCell.class}, new String[]{"playButton"}, null, null, null, Theme.key_musicPicker_buttonBackground),
-
-                new ThemeDescription(bottomLayout, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundWhite),
-                new ThemeDescription(bottomLayout, ThemeDescription.FLAG_TEXTCOLOR, new Class[]{PickerBottomLayout.class}, new String[]{"cancelButton"}, null, null, null, Theme.key_picker_enabledButton),
-                new ThemeDescription(bottomLayout, ThemeDescription.FLAG_TEXTCOLOR | ThemeDescription.FLAG_CHECKTAG, new Class[]{PickerBottomLayout.class}, new String[]{"doneButtonTextView"}, null, null, null, Theme.key_picker_enabledButton),
-                new ThemeDescription(bottomLayout, ThemeDescription.FLAG_TEXTCOLOR | ThemeDescription.FLAG_CHECKTAG, new Class[]{PickerBottomLayout.class}, new String[]{"doneButtonTextView"}, null, null, null, Theme.key_picker_disabledButton),
-                new ThemeDescription(bottomLayout, ThemeDescription.FLAG_TEXTCOLOR, new Class[]{PickerBottomLayout.class}, new String[]{"doneButtonBadgeTextView"}, null, null, null, Theme.key_picker_badgeText),
-                new ThemeDescription(bottomLayout, ThemeDescription.FLAG_USEBACKGROUNDDRAWABLE, new Class[]{PickerBottomLayout.class}, new String[]{"doneButtonBadgeTextView"}, null, null, null, Theme.key_picker_badge),
-        };
+        @Override
+        public boolean isEmpty() {
+            return audioEntries.isEmpty();
+        }
     }
 }

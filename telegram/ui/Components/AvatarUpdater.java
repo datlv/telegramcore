@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -24,8 +24,6 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.MediaController;
-import org.telegram.messenger.VideoEditedInfo;
-import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
@@ -39,7 +37,6 @@ import org.telegram.ui.PhotoViewer;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Objects;
 
 public class AvatarUpdater implements NotificationCenter.NotificationCenterDelegate, PhotoCropActivity.PhotoEditActivityDelegate {
 
@@ -67,14 +64,7 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
     }
 
     public void openCamera() {
-        if (parentFragment == null || parentFragment.getParentActivity() == null) {
-            return;
-        }
         try {
-            if (Build.VERSION.SDK_INT >= 23 && parentFragment.getParentActivity().checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                parentFragment.getParentActivity().requestPermissions(new String[]{Manifest.permission.CAMERA}, 19);
-                return;
-            }
             Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             File image = AndroidUtilities.generatePicturePath();
             if (image != null) {
@@ -89,7 +79,7 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
             }
             parentFragment.startActivityForResult(takePictureIntent, 13);
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
     }
 
@@ -103,7 +93,7 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
         PhotoAlbumPickerActivity fragment = new PhotoAlbumPickerActivity(true, false, false, null);
         fragment.setDelegate(new PhotoAlbumPickerActivity.PhotoAlbumPickerActivityDelegate() {
             @Override
-            public void didSelectPhotos(ArrayList<String> photos, ArrayList<String> captions, ArrayList<Integer> ttls, ArrayList<MediaController.PhotoEntry> videos, ArrayList<ArrayList<TLRPC.InputDocument>> masks, ArrayList<MediaController.SearchImage> webPhotos) {
+            public void didSelectPhotos(ArrayList<String> photos, ArrayList<String> captions, ArrayList<ArrayList<TLRPC.InputDocument>> masks, ArrayList<MediaController.SearchImage> webPhotos) {
                 if (!photos.isEmpty()) {
                     Bitmap bitmap = ImageLoader.loadBitmap(photos.get(0), null, 800, 800, true);
                     processBitmap(bitmap);
@@ -117,8 +107,13 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
                     photoPickerIntent.setType("image/*");
                     parentFragment.startActivityForResult(photoPickerIntent, 14);
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
+            }
+
+            @Override
+            public boolean didSelectVideo(String path) {
+                return true;
             }
         });
         parentFragment.presentFragment(fragment);
@@ -126,7 +121,7 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
 
     private void startCrop(String path, Uri uri) {
         try {
-            LaunchActivity activity = (LaunchActivity) parentFragment.getParentActivity();
+            LaunchActivity activity = (LaunchActivity)parentFragment.getParentActivity();
             if (activity == null) {
                 return;
             }
@@ -140,7 +135,7 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
             photoCropActivity.setDelegate(this);
             activity.presentFragment(photoCropActivity);
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
             Bitmap bitmap = ImageLoader.loadBitmap(path, uri, 800, 800, true);
             processBitmap(bitmap);
         }
@@ -154,7 +149,7 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
                 try {
                     ExifInterface ei = new ExifInterface(currentPicturePath);
                     int exif = ei.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
-                    switch (exif) {
+                    switch(exif) {
                         case ExifInterface.ORIENTATION_ROTATE_90:
                             orientation = 90;
                             break;
@@ -166,13 +161,13 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
                             break;
                     }
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
                 final ArrayList<Object> arrayList = new ArrayList<>();
                 arrayList.add(new MediaController.PhotoEntry(0, 0, 0, currentPicturePath, orientation, false));
                 PhotoViewer.getInstance().openPhotoForSelect(arrayList, 0, 1, new PhotoViewer.EmptyPhotoViewerProvider() {
                     @Override
-                    public void sendButtonPressed(int index, VideoEditedInfo videoEditedInfo) {
+                    public void sendButtonPressed(int index) {
                         String path = null;
                         MediaController.PhotoEntry photoEntry = (MediaController.PhotoEntry) arrayList.get(0);
                         if (photoEntry.imagePath != null) {
@@ -217,7 +212,7 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
                 uploadingAvatar = FileLoader.getInstance().getDirectory(FileLoader.MEDIA_DIR_CACHE) + "/" + bigPhoto.location.volume_id + "_" + bigPhoto.location.local_id + ".jpg";
                 NotificationCenter.getInstance().addObserver(AvatarUpdater.this, NotificationCenter.FileDidUpload);
                 NotificationCenter.getInstance().addObserver(AvatarUpdater.this, NotificationCenter.FileDidFailUpload);
-                FileLoader.getInstance().uploadFile(uploadingAvatar, false, true, ConnectionsManager.FileTypePhoto);
+                FileLoader.getInstance().uploadFile(uploadingAvatar, false, true);
             }
         }
     }
@@ -230,12 +225,12 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
     @Override
     public void didReceivedNotification(int id, final Object... args) {
         if (id == NotificationCenter.FileDidUpload) {
-            String location = (String) args[0];
+            String location = (String)args[0];
             if (uploadingAvatar != null && location.equals(uploadingAvatar)) {
                 NotificationCenter.getInstance().removeObserver(AvatarUpdater.this, NotificationCenter.FileDidUpload);
                 NotificationCenter.getInstance().removeObserver(AvatarUpdater.this, NotificationCenter.FileDidFailUpload);
                 if (delegate != null) {
-                    delegate.didUploadedPhoto((TLRPC.InputFile) args[1], smallPhoto, bigPhoto);
+                    delegate.didUploadedPhoto((TLRPC.InputFile)args[1], smallPhoto, bigPhoto);
                 }
                 uploadingAvatar = null;
                 if (clearAfterUpdate) {
@@ -244,7 +239,7 @@ public class AvatarUpdater implements NotificationCenter.NotificationCenterDeleg
                 }
             }
         } else if (id == NotificationCenter.FileDidFailUpload) {
-            String location = (String) args[0];
+            String location = (String)args[0];
             if (uploadingAvatar != null && location.equals(uploadingAvatar)) {
                 NotificationCenter.getInstance().removeObserver(AvatarUpdater.this, NotificationCenter.FileDidUpload);
                 NotificationCenter.getInstance().removeObserver(AvatarUpdater.this, NotificationCenter.FileDidFailUpload);

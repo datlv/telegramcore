@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Cells;
@@ -14,6 +14,7 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Build;
 import android.text.Layout;
 import android.text.StaticLayout;
 import android.text.TextPaint;
@@ -51,6 +52,7 @@ public class SharedLinkCell extends FrameLayout {
 
     private boolean linkPreviewPressed;
     private LinkPath urlPath = new LinkPath();
+    private static Paint urlPaint;
     private int pressedLink;
 
     private ImageReceiver linkImageView;
@@ -77,17 +79,27 @@ public class SharedLinkCell extends FrameLayout {
 
     private MessageObject message;
 
-    private TextPaint titleTextPaint;
-    private TextPaint descriptionTextPaint;
+    private static TextPaint titleTextPaint;
+    private static TextPaint descriptionTextPaint;
+    private static Paint paint;
 
     public SharedLinkCell(Context context) {
         super(context);
 
-        titleTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-        titleTextPaint.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
-        titleTextPaint.setColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        if (titleTextPaint == null) {
+            titleTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            titleTextPaint.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            titleTextPaint.setColor(0xff212121);
 
-        descriptionTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            descriptionTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+
+            paint = new Paint();
+            paint.setColor(0xffd9d9d9);
+            paint.setStrokeWidth(1);
+
+            urlPaint = new Paint();
+            urlPaint.setColor(Theme.MSG_LINK_SELECT_BACKGROUND_COLOR);
+        }
 
         titleTextPaint.setTextSize(AndroidUtilities.dp(16));
         descriptionTextPaint.setTextSize(AndroidUtilities.dp(16));
@@ -98,7 +110,6 @@ public class SharedLinkCell extends FrameLayout {
 
         checkBox = new CheckBox(context, R.drawable.round_check2);
         checkBox.setVisibility(INVISIBLE);
-        checkBox.setColor(Theme.getColor(Theme.key_checkbox), Theme.getColor(Theme.key_checkboxCheck));
         addView(checkBox, LayoutHelper.createFrame(22, 22, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, LocaleController.isRTL ? 0 : 44, 44, LocaleController.isRTL ? 44 : 0, 0));
     }
 
@@ -195,7 +206,7 @@ public class SharedLinkCell extends FrameLayout {
                         }
                     }
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
         }
@@ -209,7 +220,7 @@ public class SharedLinkCell extends FrameLayout {
                 CharSequence titleFinal = TextUtils.ellipsize(title.replace('\n', ' '), titleTextPaint, Math.min(width, maxWidth), TextUtils.TruncateAt.END);
                 titleLayout = new StaticLayout(titleFinal, titleTextPaint, maxWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
             letterDrawable.setTitle(title);
         }
@@ -221,7 +232,7 @@ public class SharedLinkCell extends FrameLayout {
                     description2Y = descriptionY + descriptionLayout.getLineBottom(descriptionLayout.getLineCount() - 1) + AndroidUtilities.dp(1);
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
         }
 
@@ -233,7 +244,7 @@ public class SharedLinkCell extends FrameLayout {
                     description2Y += AndroidUtilities.dp(10);
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
         }
 
@@ -250,7 +261,7 @@ public class SharedLinkCell extends FrameLayout {
                     }
                     linkLayout.add(layout);
                 } catch (Exception e) {
-                    FileLog.e(e);
+                    FileLog.e("tmessages", e);
                 }
             }
         }
@@ -278,10 +289,10 @@ public class SharedLinkCell extends FrameLayout {
             }
             String filter = String.format(Locale.US, "%d_%d", maxPhotoWidth, maxPhotoWidth);
             if (photoExist || MediaController.getInstance().canDownloadMedia(MediaController.AUTODOWNLOAD_MASK_PHOTO) || FileLoader.getInstance().isLoadingFile(fileName)) {
-                linkImageView.setImage(currentPhotoObject.location, filter, currentPhotoObjectThumb != null ? currentPhotoObjectThumb.location : null, String.format(Locale.US, "%d_%d_b", maxPhotoWidth, maxPhotoWidth), 0, null, 0);
+                linkImageView.setImage(currentPhotoObject.location, filter, currentPhotoObjectThumb != null ? currentPhotoObjectThumb.location : null, String.format(Locale.US, "%d_%d_b", maxPhotoWidth, maxPhotoWidth), 0, null, false);
             } else {
                 if (currentPhotoObjectThumb != null) {
-                    linkImageView.setImage(null, null, currentPhotoObjectThumb.location, String.format(Locale.US, "%d_%d_b", maxPhotoWidth, maxPhotoWidth), 0, null, 0);
+                    linkImageView.setImage(null, null, currentPhotoObjectThumb.location, String.format(Locale.US, "%d_%d_b", maxPhotoWidth, maxPhotoWidth), 0, null, false);
                 } else {
                     linkImageView.setImageBitmap((Drawable) null);
                 }
@@ -371,19 +382,19 @@ public class SharedLinkCell extends FrameLayout {
                                     urlPath.setCurrentLayout(layout, 0, 0);
                                     layout.getSelectionPath(0, layout.getText().length(), urlPath);
                                 } catch (Exception e) {
-                                    FileLog.e(e);
+                                    FileLog.e("tmessages", e);
                                 }
                                 result = true;
                             } else if (linkPreviewPressed) {
                                 try {
                                     TLRPC.WebPage webPage = pressedLink == 0 && message.messageOwner.media != null ? message.messageOwner.media.webpage : null;
-                                    if (webPage != null && webPage.embed_url != null && webPage.embed_url.length() != 0) {
+                                    if (webPage != null && Build.VERSION.SDK_INT >= 16 && webPage.embed_url != null && webPage.embed_url.length() != 0) {
                                         delegate.needOpenWebView(webPage);
                                     } else {
                                         Browser.openUrl(getContext(), links.get(pressedLink));
                                     }
                                 } catch (Exception e) {
-                                    FileLog.e(e);
+                                    FileLog.e("tmessages", e);
                                 }
                                 resetPressedLink();
                                 result = true;
@@ -435,7 +446,7 @@ public class SharedLinkCell extends FrameLayout {
         }
 
         if (descriptionLayout != null) {
-            descriptionTextPaint.setColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            descriptionTextPaint.setColor(0xff212121);
             canvas.save();
             canvas.translate(AndroidUtilities.dp(LocaleController.isRTL ? 8 : AndroidUtilities.leftBaseline), descriptionY);
             descriptionLayout.draw(canvas);
@@ -443,7 +454,7 @@ public class SharedLinkCell extends FrameLayout {
         }
 
         if (descriptionLayout2 != null) {
-            descriptionTextPaint.setColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            descriptionTextPaint.setColor(0xff212121);
             canvas.save();
             canvas.translate(AndroidUtilities.dp(LocaleController.isRTL ? 8 : AndroidUtilities.leftBaseline), description2Y);
             descriptionLayout2.draw(canvas);
@@ -451,7 +462,7 @@ public class SharedLinkCell extends FrameLayout {
         }
 
         if (!linkLayout.isEmpty()) {
-            descriptionTextPaint.setColor(Theme.getColor(Theme.key_windowBackgroundWhiteLinkText));
+            descriptionTextPaint.setColor(Theme.MSG_LINK_TEXT_COLOR);
             int offset = 0;
             for (int a = 0; a < linkLayout.size(); a++) {
                 StaticLayout layout = linkLayout.get(a);
@@ -459,7 +470,7 @@ public class SharedLinkCell extends FrameLayout {
                     canvas.save();
                     canvas.translate(AndroidUtilities.dp(LocaleController.isRTL ? 8 : AndroidUtilities.leftBaseline), linkY + offset);
                     if (pressedLink == a) {
-                        canvas.drawPath(urlPath, Theme.linkSelectionPaint);
+                        canvas.drawPath(urlPath, urlPaint);
                     }
                     layout.draw(canvas);
                     canvas.restore();
@@ -475,9 +486,9 @@ public class SharedLinkCell extends FrameLayout {
 
         if (needDivider) {
             if (LocaleController.isRTL) {
-                canvas.drawLine(0, getMeasuredHeight() - 1, getMeasuredWidth() - AndroidUtilities.dp(AndroidUtilities.leftBaseline), getMeasuredHeight() - 1, Theme.dividerPaint);
+                canvas.drawLine(0, getMeasuredHeight() - 1, getMeasuredWidth() - AndroidUtilities.dp(AndroidUtilities.leftBaseline), getMeasuredHeight() - 1, paint);
             } else {
-                canvas.drawLine(AndroidUtilities.dp(AndroidUtilities.leftBaseline), getMeasuredHeight() - 1, getMeasuredWidth(), getMeasuredHeight() - 1, Theme.dividerPaint);
+                canvas.drawLine(AndroidUtilities.dp(AndroidUtilities.leftBaseline), getMeasuredHeight() - 1, getMeasuredWidth(), getMeasuredHeight() - 1, paint);
             }
         }
     }

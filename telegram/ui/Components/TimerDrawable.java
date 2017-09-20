@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikolai Kudashov, 2013-2017.
+ * Copyright Nikolai Kudashov, 2013-2016.
  */
 
 package org.telegram.ui.Components;
@@ -19,24 +19,28 @@ import android.text.TextPaint;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
-import org.telegram.ui.ActionBar.Theme;
+import org.telegram.messenger.R;
 
 public class TimerDrawable extends Drawable {
 
-    private TextPaint timePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-    private Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static Drawable emptyTimerDrawable;
+    private static Drawable timerDrawable;
+    private static TextPaint timePaint;
     private StaticLayout timeLayout;
     private float timeWidth = 0;
     private int timeHeight = 0;
     private int time = 0;
 
     public TimerDrawable(Context context) {
-        timePaint.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
-        timePaint.setTextSize(AndroidUtilities.dp(11));
+        if (emptyTimerDrawable == null) {
+            emptyTimerDrawable = context.getResources().getDrawable(R.drawable.header_timer);
+            timerDrawable = context.getResources().getDrawable(R.drawable.header_timer2);
+            timePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            timePaint.setColor(0xffffffff);
+            timePaint.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        }
 
-        linePaint.setStrokeWidth(AndroidUtilities.dp(1));
-        linePaint.setStyle(Paint.Style.STROKE);
+        timePaint.setTextSize(AndroidUtilities.dp(11));
     }
 
     public void setTime(int value) {
@@ -78,7 +82,7 @@ public class TimerDrawable extends Drawable {
             timeHeight = timeLayout.getHeight();
         } catch (Exception e) {
             timeLayout = null;
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
         }
 
         invalidateSelf();
@@ -86,27 +90,19 @@ public class TimerDrawable extends Drawable {
 
     @Override
     public void draw(Canvas canvas) {
-        int width = getIntrinsicWidth();
-        int height = getIntrinsicHeight();
-
-
+        int width = timerDrawable.getIntrinsicWidth();
+        int height = timerDrawable.getIntrinsicHeight();
+        Drawable drawable;
         if (time == 0) {
-            paint.setColor(Theme.getColor(Theme.key_chat_secretTimerBackground));
-            linePaint.setColor(Theme.getColor(Theme.key_chat_secretTimerText));
-
-            canvas.drawCircle(AndroidUtilities.dpf2(9), AndroidUtilities.dpf2(9), AndroidUtilities.dpf2(7.5f), paint);
-            canvas.drawCircle(AndroidUtilities.dpf2(9), AndroidUtilities.dpf2(9), AndroidUtilities.dpf2(8), linePaint);
-
-            paint.setColor(Theme.getColor(Theme.key_chat_secretTimerText));
-            canvas.drawLine(AndroidUtilities.dp(9), AndroidUtilities.dp(9), AndroidUtilities.dp(13), AndroidUtilities.dp(9), linePaint);
-            canvas.drawLine(AndroidUtilities.dp(9), AndroidUtilities.dp(5), AndroidUtilities.dp(9), AndroidUtilities.dp(9.5f), linePaint);
-
-            canvas.drawRect(AndroidUtilities.dpf2(7), AndroidUtilities.dpf2(0), AndroidUtilities.dpf2(11), AndroidUtilities.dpf2(1.5f), paint);
+            drawable = timerDrawable;
         } else {
-            paint.setColor(Theme.getColor(Theme.key_chat_secretTimerBackground));
-            timePaint.setColor(Theme.getColor(Theme.key_chat_secretTimerText));
-            canvas.drawCircle(AndroidUtilities.dp(9.5f), AndroidUtilities.dp(9.5f), AndroidUtilities.dp(9.5f), paint);
+            drawable = emptyTimerDrawable;
         }
+
+        int x = (width - drawable.getIntrinsicWidth()) / 2;
+        int y = (height - drawable.getIntrinsicHeight()) / 2;
+        drawable.setBounds(x, y, x + drawable.getIntrinsicWidth(), y + drawable.getIntrinsicHeight());
+        drawable.draw(canvas);
 
         if (time != 0 && timeLayout != null) {
             int xOffxet = 0;
@@ -135,11 +131,11 @@ public class TimerDrawable extends Drawable {
 
     @Override
     public int getIntrinsicWidth() {
-        return AndroidUtilities.dp(19);
+        return timerDrawable.getIntrinsicWidth();
     }
 
     @Override
     public int getIntrinsicHeight() {
-        return AndroidUtilities.dp(19);
+        return timerDrawable.getIntrinsicHeight();
     }
 }

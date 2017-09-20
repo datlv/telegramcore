@@ -72,9 +72,6 @@ public class PhoneFormat {
     }
 
     public static String stripExceptNumbers(String str, boolean includePlus) {
-        if (str == null) {
-            return null;
-        }
         StringBuilder res = new StringBuilder(str);
         String phoneChars = "0123456789";
         if (includePlus) {
@@ -123,14 +120,14 @@ public class PhoneFormat {
                     bos.close();
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
             try {
                 if (stream != null) {
                     stream.close();
                 }
             } catch (Exception e) {
-                FileLog.e(e);
+                FileLog.e("tmessages", e);
             }
         }
 
@@ -222,7 +219,7 @@ public class PhoneFormat {
                 }
             }
         } catch (Exception e) {
-            FileLog.e(e);
+            FileLog.e("tmessages", e);
             return orig;
         }
 
